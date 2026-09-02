@@ -4,33 +4,40 @@ Ordered. Take the top unblocked item.
 
 ## Now
 
-1. **Wire the live Figma file.** Follow `docs/figma-sync.md`. Blocked on Serhii: needs a Figma
-   personal access token, the file key, and the team id. Everything else is written and committed.
+1. **Wire the automatic route.** `npm run sync` already works locally against the live Figma file.
+   The publish-to-PR path still needs a Figma personal access token and the relay deployed - see
+   `docs/figma-sync.md`. Blocked on Serhii: only he can create the token.
 
 ## Next
 
-2. **Screenshots.** Capture the demo screen in all three themes into `docs/`, wire them into
+2. **Screenshots.** Capture the Settings screen in all three themes into `docs/`, wire them into
    `README.md`, and add a command that regenerates them so they cannot go stale.
-3. **Font tokens.** Today the app uses the platform system font. When the designer adds font
-   variables, wire `primitives.font` into `tailwind.config.js` `fontFamily` and load the faces with
-   `expo-font`.
-4. **Token diff in the PR body.** The sync PR currently says "review the diff". Print a
-   before/after table of changed tokens so review is a glance, not a JSON read.
+3. **Sync the primitives too.** Spacing, radius and type sizes were read off the design, not pulled
+   from Figma. When the designer promotes them to variables, extend `scripts/fetch-figma-mcp.mjs`
+   to pull that collection and drop the hand-written scale.
+4. **Token diff in the PR body.** The sync PR says "review the diff". Print a before/after table of
+   changed tokens so review is a glance, not a JSON read.
 
 ## Later
 
 5. **Second role in the demo.** MVP bar wants a multi-role E2E path. Add a "designer preview" mode
-   that renders every component in every theme side by side, next to the current "developer" screen.
+   that renders every component in every theme side by side, next to the current app screen.
 
 ## Decided without asking
 
 Grill tree decided without asking Serhii:
 - **Token hand-off shape**: one committed `tokens/tokens.json` shaped like the Figma Variables API
-  (collections -> modes -> variables). Both sync paths (Enterprise API, Tokens Studio plugin) write
-  the same file, so the app never learns which path produced it.
-- **Styling**: NativeWind v4 + CSS variables, not a bespoke theme context. It is the shadcn pattern
-  and it is what was asked for. Tailwind pinned to v3 - NativeWind v4 does not support Tailwind v4.
-- **Trigger**: Figma webhook + a Cloudflare Worker relay, not a cron poll. The "Ready for dev" phrase
-  only exists in the webhook payload; a poll cannot see it.
+  (collections -> modes -> variables). All three sync routes write the same file, so the app never
+  learns which one produced it.
+- **Three sync routes, not one**: local MCP (no secrets, cannot run in CI), REST Variables API
+  (Enterprise), REST Styles API (any plan). The dispatcher tries them in order.
+- **Mode-to-node map in `tokens.json`**: the MCP server resolves variables per node, so the file has
+  to say which Figma frame means "dark". One line per theme.
+- **Styling**: NativeWind v4 + CSS variables, the shadcn pattern. Tailwind pinned to v3 - NativeWind
+  v4 does not support Tailwind v4.
 - **Colour format**: hex, not OKLCH. React Native cannot parse `oklch()`.
+- **Keep Figma's variable names verbatim** rather than inventing app-side semantic names. Costs a
+  repetitive `text-text-primary`; buys a rename in Figma showing up as a compile-visible diff.
+- **No device chrome**: the Figma frames draw a status bar and home indicator; the app lets the OS
+  draw those and uses `SafeAreaView`.
 - **No theme persistence**: in-memory only. AsyncStorage is a dependency the starter does not need.

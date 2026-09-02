@@ -1,96 +1,94 @@
 import "./global.css";
+import { useState } from "react";
 import { ScrollView, View } from "react-native";
 import { StatusBar } from "expo-status-bar";
 import { SafeAreaProvider, SafeAreaView } from "react-native-safe-area-context";
+import {
+  useFonts,
+  Inter_400Regular,
+  Inter_500Medium,
+  Inter_600SemiBold,
+} from "@expo-google-fonts/inter";
 import { ThemeProvider, useTheme } from "./src/theme/ThemeProvider";
-import { Text } from "./src/components/ui/Text";
 import { Card } from "./src/components/ui/Card";
-import { Badge } from "./src/components/ui/Badge";
-import { Button } from "./src/components/ui/Button";
-import { themes } from "./src/theme/tokens.gen";
+import { Divider, SettingsRow } from "./src/components/ui/SettingsRow";
+import { StatCard } from "./src/components/ui/StatCard";
+import { TabBar } from "./src/components/ui/TabBar";
+import { Text } from "./src/components/ui/Text";
+import { ThemeOption } from "./src/components/ui/ThemeOption";
+import { Toggle } from "./src/components/ui/Toggle";
 
-function Swatches() {
-  const { theme } = useTheme();
-  const entries = Object.entries(themes[theme]);
+const themeLabels = { light: "Light", dark: "Dark", ocean: "Ocean" } as const;
+
+function Header() {
   return (
-    <View className="flex-row flex-wrap gap-3">
-      {entries.map(([name, value]) => (
-        <View key={name} className="w-24">
-          <View className="h-12 w-full rounded-sm border border-border" style={{ backgroundColor: value }} />
-          <Text variant="muted" className="mt-1 text-xs">
-            {name.replace("--color-", "")}
-          </Text>
-        </View>
-      ))}
+    <View className="w-full flex-row items-center justify-between px-24 py-12">
+      <Text variant="title">Settings</Text>
+      <View className="h-36 w-36 rounded-pill bg-primary" />
     </View>
   );
 }
 
-function Screen() {
+function Settings() {
   const { theme, setTheme, themeNames } = useTheme();
+  const [notifications, setNotifications] = useState(true);
+  const [tab, setTab] = useState("Settings");
 
   return (
-    <SafeAreaView className="flex-1 bg-bg" edges={["top", "bottom"]}>
+    <SafeAreaView className="flex-1 bg-background" edges={["top", "bottom"]}>
       <StatusBar style={theme === "light" ? "dark" : "light"} />
-      <ScrollView contentContainerClassName="gap-6 p-5 pb-7">
-        <View className="gap-2">
-          <Badge tone="accent">tokens/tokens.json</Badge>
-          <Text variant="display">Design tokens, live.</Text>
-          <Text variant="muted">
-            Every colour, radius and size on this screen comes from one JSON file that Figma writes.
-          </Text>
-        </View>
+      <Header />
 
-        <Card className="gap-4">
-          <Text variant="title">Theme</Text>
-          <View className="flex-row flex-wrap gap-2">
+      <ScrollView contentContainerClassName="gap-20 px-20 pb-24 pt-8">
+        <Card className="gap-12 p-16">
+          <Text variant="eyebrow">APPEARANCE</Text>
+          <View className="w-full flex-row gap-10">
             {themeNames.map((name) => (
-              <Button
+              <ThemeOption
                 key={name}
-                label={name}
-                variant={name === theme ? "primary" : "secondary"}
+                name={name}
+                label={themeLabels[name] ?? name}
+                selected={name === theme}
                 onPress={() => setTheme(name)}
               />
             ))}
           </View>
-          <Text variant="muted">Active mode: {theme}. Themes come from Figma variable modes.</Text>
         </Card>
 
-        <Card className="gap-4">
-          <Text variant="title">Palette</Text>
-          <Swatches />
+        <Card className="py-4">
+          <SettingsRow
+            icon="🔔"
+            label="Notifications"
+            right={<Toggle value={notifications} onValueChange={setNotifications} />}
+          />
+          <Divider />
+          <SettingsRow icon="🔒" label="Privacy" value="Default" onPress={() => {}} />
+          <Divider />
+          <SettingsRow icon="💾" label="Storage" value="24.5 GB" onPress={() => {}} />
+          <Divider />
+          <SettingsRow icon="🌐" label="Language" value="English" onPress={() => {}} />
         </Card>
 
-        <Card className="gap-4">
-          <Text variant="title">Components</Text>
-          <View className="gap-3">
-            <Button label="Primary" className="self-start" />
-            <Button label="Secondary" variant="secondary" className="self-start" />
-            <Button label="Ghost" variant="ghost" className="self-start" />
-            <Button label="Danger" variant="danger" className="self-start" />
-            <Button label="Loading" loading className="self-start" />
-            <Button label="Disabled" disabled className="self-start" />
-          </View>
-        </Card>
-
-        <Card className="gap-3">
-          <Text variant="title">Type scale</Text>
-          <Text variant="display">Display</Text>
-          <Text variant="title">Title</Text>
-          <Text variant="body">Body</Text>
-          <Text variant="label">Label</Text>
-          <Text variant="muted">Muted</Text>
-        </Card>
+        <View className="w-full flex-row gap-12">
+          <StatCard value="2.4k" label="Following" tone="primary" />
+          <StatCard value="18.7k" label="Followers" tone="success" />
+          <StatCard value="342" label="Posts" tone="warning" />
+        </View>
       </ScrollView>
+
+      <TabBar active={tab} onChange={setTab} />
     </SafeAreaView>
   );
 }
 
 export default function App() {
+  const [fontsLoaded] = useFonts({ Inter_400Regular, Inter_500Medium, Inter_600SemiBold });
+  if (!fontsLoaded) return null;
+
   return (
     <SafeAreaProvider>
       <ThemeProvider>
-        <Screen />
+        <Settings />
       </ThemeProvider>
     </SafeAreaProvider>
   );

@@ -13,7 +13,7 @@ export function ThemeProvider({ children, initial = "light" }: { children: React
 
   return (
     <ThemeContext.Provider value={value}>
-      <View style={vars(themes[theme])} className="flex-1 bg-bg">
+      <View style={vars(themes[theme])} className="flex-1 bg-background">
         {children}
       </View>
     </ThemeContext.Provider>
@@ -25,3 +25,6 @@ export function useTheme() {
   if (!ctx) throw new Error("useTheme must be used inside <ThemeProvider>");
   return ctx;
 }
+
+export { themes, themeNames };
+export type { ThemeName };

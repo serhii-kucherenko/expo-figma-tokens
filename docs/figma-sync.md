@@ -3,7 +3,22 @@
 Goal: the designer publishes the library with **Ready for dev** in the publish message, and a pull
 request appears here with the new token values.
 
-## How it works
+## Route 0 - local sync, no setup at all
+
+If you just want a Figma change in the app right now, you do not need any of the below.
+
+1. Open the **Figma desktop app** on the design file.
+2. Figma menu -> **Preferences** -> **Enable local MCP server**.
+3. `npm run sync`
+
+That reads the variables straight out of the running desktop app. No token, no plan requirement, no
+webhook. It cannot run in CI - the server is local to your machine - which is what the rest of this
+document is for.
+
+The theme-to-node map lives in `tokens/tokens.json` under `figma.themeNodes`. Adding a theme means
+adding one line there and re-running the sync.
+
+## How the automatic route works
 
 ```
 Designer clicks Publish in Figma

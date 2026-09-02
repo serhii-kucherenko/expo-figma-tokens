@@ -3,8 +3,11 @@
   "version": "1.0.0",
   "main": "index.ts",
   "dependencies": {
+    "@expo-google-fonts/inter": "^0.4.2",
     "@expo/metro-runtime": "~57.0.15",
     "expo": "~57.0.19",
+    "expo-font": "~57.0.3",
+    "expo-splash-screen": "~57.0.8",
     "expo-status-bar": "~57.0.1",
     "nativewind": "^4.2.6",
     "react": "19.2.3",
@@ -26,8 +29,10 @@
     "ios": "expo start --ios",
     "web": "expo start --web",
     "tokens": "node scripts/build-tokens.mjs",
-    "tokens:fetch": "node scripts/fetch-figma-variables.mjs",
-    "typecheck": "tsc --noEmit"
+    "tokens:fetch": "node scripts/fetch-figma-tokens.mjs",
+    "typecheck": "tsc --noEmit",
+    "tokens:mcp": "node scripts/fetch-figma-mcp.mjs",
+    "sync": "node scripts/fetch-figma-mcp.mjs && node scripts/build-tokens.mjs"
   },
   "private": true
 }

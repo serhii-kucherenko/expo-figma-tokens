@@ -24,6 +24,11 @@ module.exports = {
       borderRadius: group("radius"),
       spacing: group("space"),
       fontSize: group("text"),
+      fontFamily: {
+        sans: ["Inter_400Regular"],
+        medium: ["Inter_500Medium"],
+        semibold: ["Inter_600SemiBold"],
+      },
     },
   },
   plugins: [],
