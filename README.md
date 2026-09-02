@@ -1,12 +1,75 @@
 # expo-figma-tokens
 
-**The problem this repo solves:** a designer changes a colour in Figma, and that change reaches the
-Expo app without anyone copying a hex code by hand.
+A designer changes a colour in Figma. A pull request appears in this repo with that colour changed.
+Nobody typed a hex code.
 
 Three themes - Light, Dark, Ocean - are Figma variable *modes*. Add a fourth mode in Figma and it
-appears in the app with no code change.
+shows up in the app with no code change.
 
 Figma file: <https://www.figma.com/design/QFShnF5EA3cNl8afImTyuj/Untitled>
+
+---
+
+## 0. Why bother
+
+### The thing this replaces
+
+Without it, a colour change is a conversation:
+
+```mermaid
+flowchart LR
+  A["Designer changes<br/>a colour"] --> B["Tells the dev<br/>in Slack"]
+  B --> C["Dev opens Figma,<br/>copies the hex"]
+  C --> D["Dev finds every place<br/>it is hard-coded"]
+  D --> E["Dev pastes it,<br/>hopes they got all 3 themes"]
+  E --> F["Designer reviews<br/>a screenshot"]
+  F -->|"one was missed"| B
+```
+
+Every arrow is a place it goes wrong. The usual failures:
+
+| Failure | What it looks like |
+|---|---|
+| A theme is forgotten | Light gets the new colour, Ocean keeps the old one |
+| A hex is mistyped | `#3D6BF5` becomes `#3D68F5`, nobody notices for a month |
+| The change is never asked for | The designer stops bothering for small fixes, and design drifts |
+| Nobody knows what is current | Figma says one thing, the app says another, neither is wrong on paper |
+
+### What replaces it
+
+```mermaid
+flowchart LR
+  A["Designer changes<br/>a colour"] --> B["Saves a version<br/>named 'Ready for dev'"]
+  B --> C["A pull request appears"]
+  C --> D["Dev reads the diff<br/>and merges"]
+```
+
+Four steps, two of them automatic. What it buys:
+
+- **One source of truth.** Figma holds the values. This repo holds a generated copy. A hex code
+  exists in exactly one place a human edits, and that place is Figma.
+- **A colour change is a reviewable diff.** `- "#3D6BF5"` / `+ "#E04747"` in a PR, with the theme
+  it belongs to next to it. Not a screenshot, not a Slack thread.
+- **All modes move together.** The build fails if a variable is missing from any theme, so a
+  half-applied change cannot reach the app.
+- **A rename breaks the build, loudly.** If the designer renames `color/primary`, the class
+  `bg-primary` stops existing and `tsc` says so - instead of the app quietly rendering nothing.
+- **The designer keeps working in Figma.** No export step, no plugin to remember, no handoff doc.
+  Saving a named version is the whole interface.
+
+### What it costs
+
+- One extra habit for the designer: name the version `Ready for dev` when it is ready. Any other
+  name is ignored, so unfinished work stays out.
+- The variable name in Figma **is** the API. Renaming one is a breaking change, on purpose.
+- A one-time `npm run tokens:map` on a Mac whenever a variable is added, renamed or removed. See
+  section 3.
+
+### When it is not worth it
+
+If one person is both designer and developer, and the palette has six colours that never move, this
+is more machinery than the problem deserves. It starts paying off with a second person, a second
+theme, or a palette anyone is still arguing about.
 
 ---
 
@@ -19,7 +82,7 @@ flowchart TD
   B -->|"Automatic, on save"| D["File -> Save to version history,<br/>named 'Ready for dev'"]
 
   D --> E{"How does GitHub hear about it?"}
-  E -->|"No server, up to 15 min"| E1["Scheduled Action asks Figma<br/>for the newest version name"]
+  E -->|"No server, on a timer"| E1["Scheduled Action asks Figma<br/>for the newest version name"]
   E -->|"Instant, needs a relay"| E2["FILE_VERSION_UPDATE webhook<br/>-> Vercel function"]
   E1 -->|"no match"| G["skipped"]
   E2 -->|"no match"| G
@@ -166,7 +229,9 @@ npm install && npm run tokens && npx expo start
 
 ---
 
-## 5. Test it end to end in two minutes
+## 5. Test it end to end
+
+### Locally, in two minutes
 
 1. `npx expo start --web` and open the app.
 2. In Figma, open the file and change `color/primary` in the **Light** mode to something obvious.
@@ -174,6 +239,30 @@ npm install && npm run tokens && npx expo start
 4. The app reloads. Every blue thing is the new colour.
 
 If step 3 says it cannot reach the server: Figma menu -> Preferences -> **Enable local MCP server**.
+
+### On GitHub, the way the designer will use it
+
+1. In Figma, change any colour variable.
+2. **File -> Save to version history**, name it `Ready for dev`, save.
+3. Actions tab -> **Sync Figma tokens** -> **Run workflow**.
+4. A pull request appears with your change. Read the diff, merge.
+
+Then test the gate: save another version named `wip`, and confirm no PR appears.
+
+### Trigger state
+
+| Trigger | State | Delay |
+|---|---|---|
+| Manual button in the Actions tab | on | seconds |
+| Hourly schedule | **off** | up to an hour |
+| Webhook relay on Vercel | needs a working `GH_TOKEN` | instant |
+
+The schedule is commented out in `.github/workflows/sync-figma-tokens.yml` while the flow is being
+tested by hand, so an hourly run does not race the person testing. Uncomment the `schedule:` block
+to arm it.
+
+The manual button always syncs and skips the version-name check, because a human asked for it.
+Only the schedule and the webhook read the `Ready for dev` name.
 
 ---
 

@@ -1,11 +1,13 @@
 name: Sync Figma tokens
 
 on:
-  # Safety net for a webhook that never arrived. It only does work when the
-  # newest Figma version is named "Ready for dev", so a quiet hour costs one
-  # cheap API call and opens nothing.
-  schedule:
-    - cron: "17 * * * *"
+  # OFF while the flow is being tested by hand. The route works - it opened and
+  # merged PR #1 - but an hourly run would race the person doing the testing.
+  # Uncomment to arm it. It only does work when the newest Figma version is
+  # named "Ready for dev", so a quiet hour costs one cheap API call.
+  #
+  # schedule:
+  #   - cron: "17 * * * *"
 
   # Pushed instantly by the webhook relay, when one is deployed.
   repository_dispatch:
