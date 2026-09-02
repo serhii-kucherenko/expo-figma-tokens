@@ -98,6 +98,9 @@ run log in the Actions tab.
 
 ### A5. Deploy the relay
 
+**Already done for this repo** - see `infra/figma-webhook/README.md` for the live URL, what is set,
+and the two steps left (`GH_TOKEN`, and turning deployment protection off). The generic steps:
+
 ```bash
 cd infra/figma-webhook
 npx vercel link

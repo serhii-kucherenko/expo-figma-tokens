@@ -3,27 +3,52 @@
 One serverless function. Figma cannot call GitHub's `repository_dispatch` endpoint itself, and the
 "Ready for dev" check has to live somewhere. This is that somewhere.
 
-Deploy it as its own Vercel project - it is not part of the Expo app.
+## Deployed
+
+| | |
+|---|---|
+| Vercel project | `figma-webhook` on team **Kucherenko Web** |
+| Endpoint | <https://figma-webhook-flax.vercel.app/api/figma> |
+| Dashboard | <https://vercel.com/kucherenko-web/figma-webhook> |
+| Root Directory | `infra/figma-webhook` - a push to `main` redeploys it |
+
+## Environment variables
+
+| Name | Set? | What it is |
+|---|---|---|
+| `FIGMA_PASSCODE` | yes | Shared secret Figma echoes back. Value is in `.env.local` at the repo root (gitignored). |
+| `GITHUB_REPO` | yes | `serhii-kucherenko/expo-figma-tokens` |
+| `GH_TOKEN` | **no** | Fine-grained GitHub PAT, Contents: read-write on this repo only |
+
+`GH_TOKEN`, not `GITHUB_TOKEN`: Vercel's Git integration injects `GITHUB_*` names itself.
+
+Add the missing one:
 
 ```bash
 cd infra/figma-webhook
-npx vercel link          # create a new project, name it figma-webhook-relay
-npx vercel env add FIGMA_PASSCODE production   # a long random string you invent, keep it
-npx vercel env add GH_TOKEN production         # fine-grained PAT, Contents: read-write on the repo
-npx vercel env add GITHUB_REPO production      # serhii-kucherenko/expo-figma-tokens
-npx vercel deploy --prod
+npx vercel env add GH_TOKEN production --scope kucherenko-web
+npx vercel deploy --prod --scope kucherenko-web
 ```
 
-The endpoint is `<deployment-url>/api/figma`. That is the URL you register with Figma.
+## Deployment protection must be off
 
-`GH_TOKEN`, not `GITHUB_TOKEN`: Vercel reserves names starting with `VERCEL_` and some CI names, and
-`GITHUB_*` is injected by its Git integration.
+Figma posts to this endpoint unauthenticated. Vercel Authentication is on by default and answers
+every request with a 401 SSO page, so Figma never reaches the function.
 
-Test it without Figma:
+Turn it off: <https://vercel.com/kucherenko-web/figma-webhook/settings/deployment-protection>
+-> **Vercel Authentication** -> **Disabled** -> Save.
+
+That is safe here. The function's own passcode check is the real gate: a request without the exact
+`FIGMA_PASSCODE` is rejected before anything else happens, and the endpoint does nothing except
+forward a matching publish event to GitHub.
+
+## Test it without Figma
 
 ```bash
-curl -X POST https://<deployment-url>/api/figma -H 'content-type: application/json' \
-  -d '{"passcode":"<FIGMA_PASSCODE>","event_type":"LIBRARY_PUBLISH","description":"Ready for dev","file_name":"DS"}'
+curl -X POST https://figma-webhook-flax.vercel.app/api/figma \
+  -H 'content-type: application/json' \
+  -d "{\"passcode\":\"$(grep FIGMA_PASSCODE ../../.env.local | cut -d= -f2)\",\"event_type\":\"LIBRARY_PUBLISH\",\"description\":\"Ready for dev\",\"file_name\":\"DS\"}"
 ```
 
-It answers `dispatched` on success, or names the check that rejected the event.
+Answers `dispatched` on success. Any other answer names the check that rejected the event, so you
+can see exactly where it stopped.
