@@ -4,18 +4,16 @@ Ordered. Take the top unblocked item.
 
 ## Now
 
-1. **Give the Vercel relay a working GitHub token.** The hourly cron already opens the PR, so this
-   only buys instant instead of within-the-hour. The relay's logic is proven end to end; the last
-   `GH_TOKEN` in Vercel answered `401 Bad credentials`. Blocked on Serhii: only he can set it.
-   Runbook in `infra/figma-webhook/README.md`.
+1. **Arm the hourly schedule.** Commented out in the workflow while Serhii tests the flow by hand,
+   so a scheduled run does not race him. Uncomment the `schedule:` block once he is done.
 
 ## Next
 
 2. **Screenshots.** Capture the Settings screen in all three themes into `docs/`, wire them into
    `README.md`, and add a command that regenerates them so they cannot go stale.
-3. **Sync the primitives too.** Spacing, radius and type sizes were read off the design, not pulled
-   from Figma. When the designer promotes them to variables, extend `scripts/fetch-figma-mcp.mjs`
-   to pull that collection and drop the hand-written scale.
+3. **Pull primitives as real variables.** They are read off the design geometry today, which works
+   but infers intent from padding and fixed sizes. If the designer promotes spacing, radius and
+   type size to Figma variables, drop the geometry pass for a plain variable read.
 4. **Token diff in the PR body.** The sync PR says "review the diff". Print a before/after table of
    changed tokens so review is a glance, not a JSON read.
 
@@ -41,10 +39,14 @@ Grill tree decided without asking Serhii:
   `npm run tokens:map` runs once on a Mac, asks the MCP server per node (deepest-first, subtracting
   names already taken, since a node answer covers its whole subtree), and writes `figma.variableIds`
   into `tokens.json`. Re-run it when a variable is renamed, added or removed - not on a value change.
-- **Relay on Vercel, not Cloudflare**: Serhii already has two Vercel hobby teams wired to this
-  GitHub account, so the relay costs him no new account. A scheduled poll is documented as Route C
-  for anyone who wants zero hosting, but it cannot see the publish message and so loses the
-  "Ready for dev" gate.
+- **No webhook relay at all**: one was built on Vercel and then deleted. It bought instant instead
+  of hourly, at the cost of a server kept alive holding a GitHub token. The scheduled poll reads the
+  same version name, so it keeps the "Ready for dev" gate the relay was needed for.
+- **Primitives read from geometry, not hand-written**: the file has 15 variables, all colours, and
+  no published styles, so spacing/radius/type have nothing to read. Auto-layout padding, gaps and
+  FIXED node sizes are deliberate values; a hugging node's width is not. `build-tokens.mjs` fails if
+  the resulting scale no longer covers a class the components use, because NativeWind drops an
+  unknown class in silence.
 - **Mode-to-node map in `tokens.json`**: the MCP server resolves variables per node, so the file has
   to say which Figma frame means "dark". One line per theme.
 - **Styling**: NativeWind v4 + CSS variables, the shadcn pattern. Tailwind pinned to v3 - NativeWind
