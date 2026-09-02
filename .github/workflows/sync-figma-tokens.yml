@@ -1,11 +1,22 @@
 name: Sync Figma tokens
 
 on:
-  # Fired by the webhook relay when a Figma version is named "Ready for dev".
+  # No server: check every 15 minutes whether the newest saved Figma version
+  # is named "Ready for dev".
+  schedule:
+    - cron: "*/15 * * * *"
+
+  # Pushed instantly by the webhook relay, when one is deployed.
   repository_dispatch:
     types: [figma-ready-for-dev]
+
   # Manual button in the Actions tab.
   workflow_dispatch:
+    inputs:
+      force:
+        description: "Sync even if the newest version is not named Ready for dev"
+        type: boolean
+        default: false
 
 permissions:
   contents: write
@@ -24,19 +35,33 @@ jobs:
 
       - run: npm ci
 
-      - name: Pull variables from Figma
+      # The scheduled run has no payload, so it has to ask Figma what the newest
+      # version is called. Dispatch and manual runs already know.
+      - name: Check the newest Figma version name
+        id: check
+        if: github.event_name == 'schedule'
         env:
           FIGMA_TOKEN: ${{ secrets.FIGMA_TOKEN }}
-          FIGMA_FILE_KEY: ${{ secrets.FIGMA_FILE_KEY }}
+        run: node scripts/check-figma-version.mjs
+
+      - name: Pull variables from Figma
+        if: github.event_name != 'schedule' || steps.check.outputs.match == 'true'
+        env:
+          FIGMA_TOKEN: ${{ secrets.FIGMA_TOKEN }}
         run: npm run tokens:fetch
 
       - name: Regenerate theme
+        if: github.event_name != 'schedule' || steps.check.outputs.match == 'true'
         run: npm run tokens
 
       - name: Typecheck
+        if: github.event_name != 'schedule' || steps.check.outputs.match == 'true'
         run: npm run typecheck
 
+      # Opens a PR only when the token values actually changed, so a run that
+      # finds nothing new is silent.
       - name: Open pull request
+        if: github.event_name != 'schedule' || steps.check.outputs.match == 'true'
         uses: peter-evans/create-pull-request@v7
         with:
           branch: figma/tokens
@@ -44,11 +69,11 @@ jobs:
           commit-message: "design: sync tokens from Figma"
           title: "design: sync tokens from Figma"
           body: |
-A Figma version was saved as **Ready for dev**.
+            A Figma version was saved as **Ready for dev**.
 
-            - Published by: `${{ github.event.client_payload.triggered_by || 'manual run' }}`
-            - Version name: `${{ github.event.client_payload.description || 'n/a' }}`
-            - File: `${{ github.event.client_payload.file_name || 'n/a' }}`
+            - Version name: `${{ steps.check.outputs.label || github.event.client_payload.description || 'manual run' }}`
+            - Trigger: `${{ github.event_name }}`
+            - Saved by: `${{ github.event.client_payload.triggered_by || 'n/a' }}`
 
             `tokens/tokens.json` and `src/theme/tokens.gen.ts` are regenerated. Review the diff, then merge.
           labels: design-tokens

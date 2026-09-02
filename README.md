@@ -18,11 +18,13 @@ flowchart TD
   B -->|"Manual, local, 5 seconds"| C["npm run sync<br/>reads Figma desktop MCP server"]
   B -->|"Automatic, on save"| D["File -> Save to version history,<br/>named 'Ready for dev'"]
 
-  D --> E["Figma FILE_VERSION_UPDATE webhook"]
-  E --> F["Relay function on Vercel<br/>checks the version name"]
-  F -->|"no match"| G["ignored"]
-  F -->|"match"| H["GitHub repository_dispatch"]
-  H --> I["GitHub Action<br/>pulls over the REST API"]
+  D --> E{"How does GitHub hear about it?"}
+  E -->|"No server, up to 15 min"| E1["Scheduled Action asks Figma<br/>for the newest version name"]
+  E -->|"Instant, needs a relay"| E2["FILE_VERSION_UPDATE webhook<br/>-> Vercel function"]
+  E1 -->|"no match"| G["skipped"]
+  E2 -->|"no match"| G
+  E1 -->|"match"| I["GitHub Action<br/>pulls over the REST API"]
+  E2 -->|"match"| H["repository_dispatch"] --> I
 
   C --> J["tokens/tokens.json"]
   I --> J
