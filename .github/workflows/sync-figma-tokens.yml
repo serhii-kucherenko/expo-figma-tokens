@@ -1,14 +1,11 @@
 name: Sync Figma tokens
 
 on:
-  # DISABLED. The Variables REST API needs the file_variables:read scope, which
-  # Figma does not offer outside Enterprise - two tokens created with every
-  # available scope ticked both came back without it. Until this repo has a REST
-  # route that works on this plan, a scheduled run would fail every 15 minutes
-  # and mail about it. Re-enable by uncommenting once one exists.
-  #
-  # schedule:
-  #   - cron: "*/15 * * * *"
+  # Safety net for a webhook that never arrived. It only does work when the
+  # newest Figma version is named "Ready for dev", so a quiet hour costs one
+  # cheap API call and opens nothing.
+  schedule:
+    - cron: "17 * * * *"
 
   # Pushed instantly by the webhook relay, when one is deployed.
   repository_dispatch:

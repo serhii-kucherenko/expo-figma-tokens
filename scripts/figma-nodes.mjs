@@ -1,9 +1,9 @@
 // Walking a Figma REST node tree for variable-bound colours.
 import { hex } from "./figma-api.mjs";
 
-export function walk(node, visit) {
-  visit(node);
-  for (const child of node.children ?? []) walk(child, visit);
+export function walk(node, visit, depth = 0) {
+  visit(node, depth);
+  for (const child of node.children ?? []) walk(child, visit, depth + 1);
 }
 
 // A node can bind a variable to its fills and, separately, to its strokes.
