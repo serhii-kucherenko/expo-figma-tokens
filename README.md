@@ -15,6 +15,8 @@ shows up in the app with no code change.
 | Font sizes | `fontSize` in the design | `text-13` |
 | Spacing and sizes | auto-layout padding, gaps, fixed node sizes | `p-16`, `gap-8`, `h-52` |
 
+Both sync routes pull all four.
+
 The only thing not synced is the font family and weight. See [section 2](#what-is-not-synced).
 
 Figma file: <https://www.figma.com/design/QFShnF5EA3cNl8afImTyuj/Untitled>
@@ -92,12 +94,12 @@ second person, a second theme, or a design anyone is still arguing about.
 ```mermaid
 flowchart TD
   A["Designer edits the design in Figma<br/>colour variables, radii, spacing, type"] --> B{"How does it leave Figma?"}
-  B -->|"Manual, local, 5 seconds"| C["npm run sync<br/>reads Figma desktop MCP server<br/><i>colours only</i>"]
+  B -->|"Manual, local, 5 seconds"| C["npm run sync<br/>reads Figma desktop MCP server"]
   B -->|"Automatic, on save"| D["File -> Save to version history,<br/>named 'Ready for dev'"]
 
   D --> E["Scheduled Action asks Figma<br/>for the newest version name"]
   E -->|"no match"| G["skipped, no PR"]
-  E -->|"match"| I["GitHub Action<br/>pulls over the REST API<br/><i>colours and the scale</i>"]
+  E -->|"match"| I["GitHub Action<br/>pulls over the REST API"]
 
   C --> J["tokens/tokens.json"]
   I --> J
@@ -167,11 +169,14 @@ one.
 This Figma file defines **15 variables, all colours**. There are no variables for spacing, radius or
 type size, and no published styles. So those are read off the design itself:
 
-| Scale | Read from |
-|---|---|
-| `radius/*` | `cornerRadius` on any node |
-| `text/*` | `style.fontSize` on any text node |
-| `space/*` | auto-layout padding and gaps, plus the size of a node pinned to **FIXED** |
+| Scale | Read from (REST) | Read from (local MCP) |
+|---|---|---|
+| `radius/*` | `cornerRadius` on any node | `rounded-[12px]` in the generated code |
+| `text/*` | `style.fontSize` on any text node | `text-[13px]` |
+| `space/*` | auto-layout padding and gaps, plus the size of a node pinned to **FIXED** | `p-[16px]`, `gap-[8px]`, `h-[52px]`, `size-[36px]` |
+
+The two routes agree on all 41 values. They have to be read twice because the local server generates
+code and the REST API returns a node tree, and neither offers the other.
 
 Only deliberate values count. A node set to *hug contents* is whatever width its text happened to
 measure, which is not a scale value, so those are ignored. So are sub-pixel values and anything
@@ -208,11 +213,11 @@ automating it would buy little.
 
 ```mermaid
 flowchart TB
-  subgraph L["Local - npm run sync (colours only)"]
+  subgraph L["Local - npm run sync"]
     L1["Figma desktop app, file open"] --> L2["Local MCP server<br/>127.0.0.1:3845"]
-    L2 --> L3["scripts/fetch-figma-mcp.mjs"]
+    L2 --> L3["scripts/fetch-figma-mcp.mjs<br/>colours from get_variable_defs<br/>scale from get_design_context"]
   end
-  subgraph C["CI - GitHub Action (everything)"]
+  subgraph C["CI - GitHub Action"]
     C1["GET /v1/files/:key/nodes<br/>the three theme frames"] --> C2["scripts/fetch-figma-rest.mjs"]
     M["figma.variableIds<br/>committed id -> name map"] --> C2
     C2 --> C5["colours from boundVariables<br/>scale from the geometry"]
@@ -224,7 +229,8 @@ flowchart TB
 | | Local MCP | CI REST |
 |---|---|---|
 | Syncs colours | yes | yes |
-| Syncs the radius / text / spacing scale | **no** | yes |
+| Syncs the radius / text / spacing scale | yes | yes |
+| Prunes scale values the design dropped | no, only adds | yes |
 | Needs a token | no | yes, `FIGMA_TOKEN` |
 | Needs Figma desktop running | yes | no |
 | Works in GitHub Actions | **no** | yes |
@@ -260,9 +266,9 @@ npm install && npm run tokens && npx expo start
 
 | Command | What it does |
 |---|---|
-| `npm run sync` | Pull from Figma desktop, then rebuild the theme |
+| `npm run sync` | Pull everything from Figma desktop, then rebuild the theme |
 | `npm run tokens` | Rebuild `src/theme/tokens.gen.ts` from `tokens/tokens.json` |
-| `npm run tokens:mcp` | Pull from Figma desktop only |
+| `npm run tokens:mcp` | Pull from Figma desktop only, no rebuild |
 | `npm run tokens:fetch` | Pull everything over the Figma REST API - colours from the variables, the scale from the geometry (what CI runs) |
 | `npm run tokens:map` | One-time: rebuild the variable-id map (needs Figma desktop open on the file) |
 | `npm run typecheck` | `tsc --noEmit` |
@@ -280,8 +286,8 @@ npm install && npm run tokens && npx expo start
 3. `npm run sync`
 4. The app reloads. Every blue thing is the new colour.
 
-`npm run sync` pulls colours only, because the local server reads variables and the scale is not
-made of variables. For the scale as well, use `npm run tokens:fetch`, which needs `FIGMA_TOKEN`.
+Radius, font size and spacing come through too. Change the padding in a card, run it again, and the
+scale updates.
 
 If step 3 says it cannot reach the server: Figma menu -> Preferences -> **Enable local MCP server**.
 
@@ -368,9 +374,14 @@ once, and why a rename needs it re-run.
 change a colour, `npm run sync`, watch the app reload. It cannot run in CI, because the server only
 exists next to the Figma desktop app, so it is a companion to B and not a replacement.
 
-It also only reads variables, and the radius / type / spacing scale is not made of variables on this
-file. So the fast local loop covers colours; the scale rides along on the CI route, where it belongs
-anyway - a spacing change is rarer and worth a PR.
+It reads the scale a different way from B. B walks the real node tree; D reads the code the server
+generates, where every explicit value is an arbitrary class - `p-[16px]`, `rounded-[12px]`,
+`text-[13px]`. Both land on the same 41 values.
+
+The one thing generated code cannot show is the inside of a layer the designer flattened to an SVG.
+The toggle knob is 22px and no class says so; the REST node tree does see it. So the local route
+**adds** to the scale and never prunes it, and the CI route is the one that decides a value is no
+longer used.
 
 ### Why not E
 

@@ -74,3 +74,26 @@ export function primitivesFrom({ radius, space, text }) {
     },
   };
 }
+
+// Same three scales, read out of the code the MCP server generates instead of
+// out of the REST node tree. It writes every explicit value as an arbitrary
+// Tailwind class - `p-[16px]`, `rounded-[12px]`, `text-[13px]` - and leaves
+// anything automatic as `w-full` or `shrink-0`, so the explicit ones are
+// exactly the deliberate values, same rule as geometry() above.
+const CLASS_GROUP = {
+  rounded: "radius",
+  text: "text",
+  p: "space", px: "space", py: "space", pt: "space", pb: "space", pl: "space", pr: "space",
+  m: "space", mx: "space", my: "space", mt: "space", mb: "space", ml: "space", mr: "space",
+  gap: "space", w: "space", h: "space", size: "space",
+};
+
+export function geometryFromCode(code, out = { radius: new Set(), space: new Set(), text: new Set() }) {
+  // `h-[12px]` and the shorthand `h-px`, which is how 1px is written.
+  for (const [, prefix, raw] of code.matchAll(/\b([a-z]{1,7})-(?:\[(\d+(?:\.\d+)?)px\]|(px)\b)/g).map((m) => [m[0], m[1], m[2] ?? "1"])) {
+    const group = CLASS_GROUP[prefix];
+    const v = Number(raw);
+    if (group && Number.isInteger(v) && v > 0 && v <= 120) out[group].add(v);
+  }
+  return out;
+}

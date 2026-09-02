@@ -16,8 +16,11 @@ Works today, on any Figma plan.
 2. Figma menu -> Preferences -> tick **Enable local MCP server**.
 3. `npm run sync`
 
-That reads the variables straight out of Figma and rebuilds the theme. Colours only - the spacing
-and type scale come from the REST route, and they move far less often.
+That reads the design straight out of Figma and rebuilds the theme - colours, radius, font sizes and
+spacing.
+
+It adds scale values and never removes them, because generated code cannot show the inside of a
+layer that was flattened to an SVG. Route 2 prunes.
 
 If it says it cannot reach the server, the active tab is not a design file. Click the design tab and
 run it again.
