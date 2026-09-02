@@ -4,9 +4,10 @@ Ordered. Take the top unblocked item.
 
 ## Now
 
-1. **Wire the automatic route.** `npm run sync` already works locally against the live Figma file.
-   The publish-to-PR path still needs a Figma personal access token and the relay deployed - see
-   `docs/figma-sync.md`. Blocked on Serhii: only he can create the token.
+1. **Give the Vercel relay a working GitHub token.** The hourly cron already opens the PR, so this
+   only buys instant instead of within-the-hour. The relay's logic is proven end to end; the last
+   `GH_TOKEN` in Vercel answered `401 Bad credentials`. Blocked on Serhii: only he can set it.
+   Runbook in `infra/figma-webhook/README.md`.
 
 ## Next
 
@@ -29,8 +30,17 @@ Grill tree decided without asking Serhii:
 - **Token hand-off shape**: one committed `tokens/tokens.json` shaped like the Figma Variables API
   (collections -> modes -> variables). All three sync routes write the same file, so the app never
   learns which one produced it.
-- **Three sync routes, not one**: local MCP (no secrets, cannot run in CI), REST Variables API
-  (Enterprise), REST Styles API (any plan). The dispatcher tries them in order.
+- **Two sync routes, not three**: local MCP (no secrets, cannot run in CI) and REST. The Variables
+  API needs `file_variables:read`, which Figma gates to Enterprise, and the Styles API cannot see a
+  variables-based file at all. Both fetchers were deleted rather than left as dead paths.
+- **CI resolves variables from the design, not from the variables panel.** `GET /v1/files/:key/nodes`
+  needs only `file_content:read` and returns, per node, both the variable a fill is bound to and the
+  colour it resolved to on that frame. Reading the three theme frames rebuilds the same table on any
+  plan. Verified byte-identical to the MCP route across 15 variables x 3 modes.
+- **The id -> name map is committed, not fetched.** REST gives variable ids, never names. So
+  `npm run tokens:map` runs once on a Mac, asks the MCP server per node (deepest-first, subtracting
+  names already taken, since a node answer covers its whole subtree), and writes `figma.variableIds`
+  into `tokens.json`. Re-run it when a variable is renamed, added or removed - not on a value change.
 - **Relay on Vercel, not Cloudflare**: Serhii already has two Vercel hobby teams wired to this
   GitHub account, so the relay costs him no new account. A scheduled poll is documented as Route C
   for anyone who wants zero hosting, but it cannot see the publish message and so loses the
