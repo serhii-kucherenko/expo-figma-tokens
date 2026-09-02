@@ -20,14 +20,19 @@ const named = (versions ?? []).find((v) => (v.label ?? "").trim() || (v.descript
 const text = `${named?.label ?? ""} ${named?.description ?? ""}`.toLowerCase();
 const match = text.includes(TRIGGER);
 
+// Figma has two text fields on a saved version, and the trigger may sit in
+// either, so print both - otherwise a match looks unexplained.
 console.log(
   named
-    ? `newest named version: "${(named.label || named.description).trim()}" by ${named.user?.handle ?? "?"} at ${named.created_at}`
+    ? `newest named version at ${named.created_at} by ${named.user?.handle ?? "?"}\n` +
+      `  title: "${(named.label ?? "").trim()}"\n` +
+      `  description: "${(named.description ?? "").trim()}"`
     : "no named versions in the last 10 saves"
 );
 console.log(match ? `matches "${TRIGGER}" - syncing` : `does not match "${TRIGGER}" - skipping`);
 
 if (process.env.GITHUB_OUTPUT) {
   appendFileSync(process.env.GITHUB_OUTPUT, `match=${match}\n`);
-  appendFileSync(process.env.GITHUB_OUTPUT, `label=${(named?.label ?? "").replace(/\n/g, " ")}\n`);
+  const shown = [named?.label, named?.description].filter((x) => (x ?? "").trim()).join(" - ");
+  appendFileSync(process.env.GITHUB_OUTPUT, `label=${shown.replace(/\n/g, " ")}\n`);
 }
