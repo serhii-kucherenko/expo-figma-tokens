@@ -9,10 +9,6 @@ on:
   # schedule:
   #   - cron: "17 * * * *"
 
-  # Pushed instantly by the webhook relay, when one is deployed.
-  repository_dispatch:
-    types: [figma-ready-for-dev]
-
   # Manual button in the Actions tab. Always syncs - a human asked.
   workflow_dispatch:
 
@@ -69,9 +65,8 @@ jobs:
           body: |
             A Figma version was saved as **Ready for dev**.
 
-            - Version name: `${{ steps.check.outputs.label || github.event.client_payload.description || 'manual run' }}`
+            - Version name: `${{ steps.check.outputs.label || 'manual run' }}`
             - Trigger: `${{ github.event_name }}`
-            - Saved by: `${{ github.event.client_payload.triggered_by || 'n/a' }}`
 
             `tokens/tokens.json` and `src/theme/tokens.gen.ts` are regenerated. Review the diff, then merge.
           labels: design-tokens

@@ -1,196 +1,121 @@
-# Figma -> GitHub PR runbook
+# Setup runbook
 
-Goal: the designer saves a Figma version named **Ready for dev**, and a pull request appears here
-with the new token values.
+How to get this repo syncing from a Figma file. Section 0 of the [README](../README.md) covers why;
+this covers the clicks.
 
-## Route 0 - local sync, no setup at all
+There are two routes and they need different things. Start with the local one - it needs nothing.
 
-If you just want a Figma change in the app right now, you do not need any of the below.
+---
 
-1. Open the **Figma desktop app** on the design file.
-2. Figma menu -> **Preferences** -> **Enable local MCP server**.
+## Route 1 - local sync (no token, no setup)
+
+Works today, on any Figma plan.
+
+1. Open the file in the **Figma desktop app**. Not the browser - the local server only runs
+   next to the desktop app.
+2. Figma menu -> Preferences -> tick **Enable local MCP server**.
 3. `npm run sync`
 
-That reads the variables straight out of the running desktop app. No token, no plan requirement, no
-webhook. It cannot run in CI - the server is local to your machine - which is what the rest of this
-document is for.
+That reads the variables straight out of Figma and rebuilds the theme. Colours only - the spacing
+and type scale come from the REST route, and they move far less often.
 
-The theme-to-node map lives in `tokens/tokens.json` under `figma.themeNodes`. Adding a theme means
-adding one line there and re-running the sync.
-
-## How the automatic route works
-
-```
-Designer: File -> Save to version history, names it "Ready for dev"
-        |
-        v
-Figma FILE_VERSION_UPDATE webhook  ->  relay function (Vercel)  ->  GitHub repository_dispatch
-                                    (checks the message)              |
-                                                                      v
-                                             GitHub Action: pull variables, rebuild theme, open PR
-```
-
-Three moving parts:
-
-1. **The webhook** - Figma fires `FILE_VERSION_UPDATE` every time someone saves a named version.
-   Registered once with `scripts/register-figma-webhook.mjs`. `LIBRARY_PUBLISH` is not used: it
-   only fires for files published as a library, and this file is not one.
-2. **The relay** - `infra/figma-webhook/api/figma.js`. Thirty lines on Vercel. It exists only
-   because Figma cannot call GitHub's `repository_dispatch` endpoint directly, and because the
-   "Ready for dev" filter has to live somewhere. Free on a Vercel hobby plan.
-3. **The Action** - `.github/workflows/sync-figma-tokens.yml`. Pulls variables, regenerates the theme,
-   opens the PR.
-
-## Before you start: which path applies to you
-
-**The Figma Variables REST API is Enterprise-plan only.** Check your plan first.
-
-| Your Figma plan | Path |
-|---|---|
-| Enterprise | **Path A** below. Fully automatic. |
-| Professional / Organization | **Path B** below. Tokens Studio plugin. |
+If it says it cannot reach the server, the active tab is not a design file. Click the design tab and
+run it again.
 
 ---
 
-## Path A - Enterprise (fully automatic)
+## Route 2 - GitHub opens a pull request
 
-### A1. Get a Figma personal access token
+This is the one the designer's work flows through. Set it up once.
 
-1. Open <https://www.figma.com/settings>.
-2. Click the **Security** tab, scroll to **Personal access tokens**.
-3. Click **Generate new token**.
-4. Name: `expo-figma-tokens ci`. Expiration: 1 year (or No expiration).
-5. Scopes - tick all three:
-   - `files:read` - the Styles API fallback, works on every plan
-   - `file_variables:read` - the Variables API, Enterprise plans only
-   - `webhooks:write` - registers the publish webhook in step A6
-6. Press Enter, then copy the token. **Figma shows it once.** Navigate away and you start over.
+### 1. Make a Figma personal access token
 
-### A2. Get the file key and team id
+1. Go to <https://www.figma.com/settings> -> **Security** tab.
+2. Scroll to **Personal access tokens** -> **Generate new token**.
+3. Name it `expo-figma-tokens CI`. Expiry: whatever you are comfortable with.
+4. Scopes: tick **File content** (`file_content:read`) and **File versions**
+   (`file_versions:read`). Nothing else is needed.
+5. Copy the token now. Figma shows it once.
 
-- File key: open the library file. The URL is
-  `https://www.figma.com/design/<FILE_KEY>/<name>`. Copy `<FILE_KEY>`.
-- Team id: open the team page. The URL is `https://www.figma.com/files/team/<TEAM_ID>/...`.
-  Copy `<TEAM_ID>`.
+You do **not** need `file_variables:read`. See section 7 of the README for why.
 
-### A3. Add the repo secrets
+### 2. Add it as a repo secret
 
 ```bash
-gh secret set FIGMA_TOKEN --repo <owner>/expo-figma-tokens
-gh secret set FIGMA_FILE_KEY --repo <owner>/expo-figma-tokens
+gh secret set FIGMA_TOKEN
 ```
 
-Check it works before wiring the webhook:
+Paste the token when it asks. Or: repo -> Settings -> Secrets and variables -> Actions ->
+**New repository secret**, name `FIGMA_TOKEN`.
+
+### 3. Let Actions open pull requests
+
+Off by default on a new repo. One call:
 
 ```bash
-gh workflow run "Sync Figma tokens" --repo <owner>/expo-figma-tokens
+gh api -X PUT repos/OWNER/REPO/actions/permissions/workflow \
+  -f default_workflow_permissions=write -F can_approve_pull_request_reviews=true
 ```
 
-A PR titled `design: sync tokens from Figma` should appear within a minute. If it does not, read the
-run log in the Actions tab.
+Or: repo -> Settings -> Actions -> General -> **Allow GitHub Actions to create and approve pull
+requests**.
 
-### A4. Make a GitHub token for the relay
+Skip it and the run still passes, but the last step fails with
+`GitHub Actions is not permitted to create or approve pull requests`.
 
-1. Open <https://github.com/settings/personal-access-tokens/new>.
-2. Token name: `figma-token-relay`. Expiration: 1 year.
-3. Repository access: **Only select repositories** -> this repo.
-4. Permissions -> Repository permissions -> **Contents: Read and write**.
-5. Generate, copy the token.
+### 4. Point it at your file
 
-### A5. Deploy the relay
+`figma.config.json` holds the file key - the part of the Figma URL after `/design/`:
 
-**Already done for this repo** - see `infra/figma-webhook/README.md` for the live URL, what is set,
-and the two steps left (`GH_TOKEN`, and turning deployment protection off). The generic steps:
+```
+https://www.figma.com/design/QFShnF5EA3cNl8afImTyuj/Untitled
+                             ^^^^^^^^^^^^^^^^^^^^^^
+```
+
+`tokens/tokens.json` holds `figma.themeNodes`, which says which frame is which theme. Right-click a
+frame in Figma -> **Copy link**; the `node-id` in that URL is the value, with the `-` turned into a
+`:`.
+
+```json
+"themeNodes": { "light": "2:67", "dark": "2:68", "ocean": "2:69" }
+```
+
+### 5. Build the variable-id map
+
+REST returns variable **ids**, never names. This joins them, once, from your Mac:
 
 ```bash
-cd infra/figma-webhook
-npx vercel link
-npx vercel env add FIGMA_PASSCODE production   # invent a long random string, keep it
-npx vercel env add GH_TOKEN production         # the token from A4
-npx vercel env add GITHUB_REPO production      # <owner>/expo-figma-tokens
-npx vercel deploy --prod
+echo "FIGMA_TOKEN=<your token>" >> .env.local   # gitignored
+npm run tokens:map
 ```
 
-Vercel prints the deployment URL. The endpoint is that URL plus `/api/figma`. Copy it.
+Needs the Figma desktop app open on the file, same as Route 1. Commit the result.
 
-No Vercel account either? See **Route C** at the bottom - a scheduled poll with no server at all.
+Re-run it when the designer **renames, adds or removes** a variable. A colour value change does not
+need it.
 
-### A6. Register the webhook
+### 6. Test it
 
-```bash
-FIGMA_TOKEN=<from A1> \
-FIGMA_FILE_KEY=QFShnF5EA3cNl8afImTyuj \
-RELAY_URL=https://figma-webhook-flax.vercel.app/api/figma \
-FIGMA_PASSCODE=<in .env.local> \
-node scripts/register-figma-webhook.mjs
-```
+1. Change a colour variable in Figma.
+2. **File -> Save to version history**, name it `Ready for dev`.
+3. Actions tab -> **Sync Figma tokens** -> **Run workflow**.
+4. A pull request appears.
 
-A `200` response means it is live. Figma immediately sends a `PING`; the worker answers `pong`.
+### 7. Arm the schedule
 
-### A7. Test end to end
+Uncomment the `schedule:` block in `.github/workflows/sync-figma-tokens.yml`. It then checks hourly
+and only acts when the newest saved version is named `Ready for dev`.
 
-Ask the designer to do **File -> Save to version history** and name it **Ready for dev - test**.
-Within a minute a PR should open. If nothing happens, `curl` the relay URL with a fake payload - it tells you exactly
-which check rejected the event:
-
-```bash
-curl -X POST <RELAY_URL> -H 'content-type: application/json' \
-  -d '{"passcode":"<FIGMA_PASSCODE>","event_type":"FILE_VERSION_UPDATE","label":"Ready for dev","file_name":"DS"}'
-```
-
-`<RELAY_URL>` ends in `/api/figma`.
+The manual button ignores that name check - a human asking is signal enough.
 
 ---
 
-## Path B - not on Enterprise (Tokens Studio plugin)
+## Things worth knowing
 
-The relay and the trigger phrase still work. Only the "pull the values" step changes: the plugin
-pushes the token JSON to GitHub instead of the Action pulling it.
-
-1. The designer installs **Tokens Studio for Figma** from the Figma community.
-2. In the plugin: **Settings -> Sync providers -> Add new -> GitHub**.
-3. Fill in: repo `<owner>/expo-figma-tokens`, branch `figma/tokens`, file path `tokens/tokens.json`,
-   and a GitHub token created the same way as step A4.
-4. The designer presses **Push to GitHub** after publishing. The plugin opens a PR on `figma/tokens`.
-5. Delete the `Pull variables from Figma` step from `.github/workflows/sync-figma-tokens.yml`, and
-   change the trigger to `pull_request` on `tokens/tokens.json` so CI regenerates
-   `src/theme/tokens.gen.ts` and pushes it into the same PR.
-
-Trade-off: the designer has to press Push. There is no way around that without the Enterprise API.
-
----
-
-## Facts this runbook depends on
-
-- Variables REST API requires an Enterprise plan and a Full seat.
-  <https://developers.figma.com/docs/rest-api/variables>
-- Webhook limits are per plan: Professional 150 file webhooks, Organization 300, Enterprise 600.
-  Team webhooks need team-admin rights. <https://developers.figma.com/docs/rest-api/webhooks>
-- `FILE_VERSION_UPDATE` carries the version name and description. Figma's docs do not pin the exact
-  field name, so the relay checks `label`, `description`, `version_name` and `name`, and its ignore
-  response prints every text field it actually saw. If none of the four is right, that message tells
-  you which one to add.
-
----
-
-## Route C - no relay at all (scheduled poll)
-
-If you do not want to host anything, drop the webhook and the relay and let GitHub check on a timer.
-
-Add this to `.github/workflows/sync-figma-tokens.yml` under `on:`:
-
-```yaml
-  schedule:
-    - cron: "0 */6 * * *"   # every 6 hours
-```
-
-`peter-evans/create-pull-request` opens a PR only when the token values actually changed, so a run
-that finds nothing new is silent and free.
-
-**What you give up:** the "Ready for dev" gate. A poll cannot see the publish message - that text
-exists only in the webhook payload. So the PR appears for *any* variable change the designer saves,
-including work in progress.
-
-**Partial recovery:** the Action can read `GET /v1/files/:key/versions`, look at the newest label,
-and skip the sync when it is not `Ready for dev`. Same gesture as the webhook route, checked on a
-timer instead of pushed. That trades a server for a delay.
+- **The designer never leaves Figma.** No export, no plugin, no handoff file. Naming a version is
+  the whole interface.
+- **`tokens/tokens.json` is generated.** Editing it by hand works until the next sync overwrites it.
+- **A rename is a breaking change on purpose.** If `color/primary` becomes `color/brand`, the class
+  `bg-primary` stops existing and the build says so.
+- **GitHub cron is not punctual.** An hourly job often runs 5-15 minutes late. If you need instant,
+  see the webhook row in the README comparison table.
