@@ -29,10 +29,11 @@
     "ios": "expo start --ios",
     "web": "expo start --web",
     "tokens": "node scripts/build-tokens.mjs",
-    "tokens:fetch": "node scripts/fetch-figma-tokens.mjs",
+    "tokens:fetch": "node scripts/fetch-figma-rest.mjs",
     "typecheck": "tsc --noEmit",
     "tokens:mcp": "node scripts/fetch-figma-mcp.mjs",
-    "sync": "node scripts/fetch-figma-mcp.mjs && node scripts/build-tokens.mjs"
+    "sync": "node scripts/fetch-figma-mcp.mjs && node scripts/build-tokens.mjs",
+    "tokens:map": "node scripts/map-figma-variable-ids.mjs"
   },
   "private": true
 }

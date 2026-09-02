@@ -107,13 +107,11 @@ flowchart TB
     L2 --> L3["scripts/fetch-figma-mcp.mjs"]
   end
   subgraph C["CI - GitHub Action"]
-    C1["Figma REST API"] --> C2["scripts/fetch-figma-tokens.mjs"]
-    C2 --> C3["Variables API<br/>Enterprise only"]
-    C2 --> C4["Styles API<br/>any plan"]
+    C1["GET /v1/files/:key/nodes<br/>the three theme frames"] --> C2["scripts/fetch-figma-rest.mjs"]
+    M["figma.variableIds<br/>committed id -> name map"] --> C2
   end
   L3 --> T["tokens/tokens.json"]
-  C3 --> T
-  C4 --> T
+  C2 --> T
 ```
 
 | | Local MCP | CI REST |
@@ -121,8 +119,28 @@ flowchart TB
 | Needs a token | no | yes, `FIGMA_TOKEN` |
 | Needs Figma desktop running | yes | no |
 | Works in GitHub Actions | **no** | yes |
-| Figma plan | any | Variables API needs Enterprise; falls back to Styles API |
+| Figma plan | any | any |
 | Speed | ~5 seconds | ~1 minute |
+
+### Why CI does not just call the Variables API
+
+`GET /v1/files/:key/variables/local` returns exactly the table we want, but it needs the
+`file_variables:read` scope, and Figma gates that scope to the Enterprise plan. There is no way to
+grant it on a lower plan.
+
+The plain file endpoint needs only `file_content:read`, which every plan has. It does not hand back
+variables - but every node it returns carries `boundVariables` (which variable a fill or stroke
+uses) **and** the colour that variable resolved to on that frame. Read the light frame and you get
+the light values; read the dark frame and you get the dark ones. Same table, assembled from the
+design instead of from the variables panel.
+
+The one thing the file endpoint will not tell us is what a variable is **called** - it only gives
+ids like `VariableID:12:34`. So `npm run tokens:map` runs once on a Mac, joins the ids from REST
+with the names from the local MCP server (both are keyed by node id), and commits the result to
+`tokens/tokens.json` under `figma.variableIds`. CI reads that map and never needs the MCP server.
+
+Re-run `npm run tokens:map` when the designer **renames, adds, or removes** a variable. Changing a
+colour value does not need it.
 
 The MCP server only runs next to the Figma desktop app, so CI can never reach it. That is why both
 routes exist.
@@ -140,7 +158,8 @@ npm install && npm run tokens && npx expo start
 | `npm run sync` | Pull from Figma desktop, then rebuild the theme |
 | `npm run tokens` | Rebuild `src/theme/tokens.gen.ts` from `tokens/tokens.json` |
 | `npm run tokens:mcp` | Pull from Figma desktop only |
-| `npm run tokens:fetch` | Pull over the Figma REST API (what CI runs) |
+| `npm run tokens:fetch` | Pull over the Figma REST API, resolving colours from the theme frames (what CI runs) |
+| `npm run tokens:map` | One-time: rebuild the variable-id map (needs Figma desktop open on the file) |
 | `npm run typecheck` | `tsc --noEmit` |
 
 `tokens/tokens.json` is the hand-off file. Never edit it by hand - the next sync overwrites it.

@@ -1,8 +1,21 @@
-// Shared bits for the two Figma fetchers.
+// Shared bits for the Figma fetchers.
+import { readFileSync } from "node:fs";
+
+// Local runs keep FIGMA_TOKEN in .env.local (gitignored). CI passes it as a real
+// env var, so anything already set wins.
+try {
+  for (const line of readFileSync(new URL("../.env.local", import.meta.url), "utf8").split("\n")) {
+    const m = line.match(/^\s*([A-Z_][A-Z0-9_]*)\s*=\s*(.*)$/);
+    if (m) process.env[m[1]] ??= m[2].trim().replace(/^["']|["']$/g, "");
+  }
+} catch {
+  // no .env.local - fine, the env may already carry what we need
+}
+
 export const requireEnv = (key) => {
   const v = process.env[key];
   if (!v) {
-    console.error(`Missing ${key}.`);
+    console.error(`Missing ${key}. Put it in .env.local or export it.`);
     process.exit(1);
   }
   return v;

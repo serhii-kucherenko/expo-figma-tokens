@@ -5,8 +5,8 @@
 // "Enable local MCP server" switched on. No token, no plan requirement.
 // The theme node ids live in tokens/tokens.json under "figma".
 import { readFileSync, writeFileSync } from "node:fs";
+import { mcp } from "./figma-mcp-client.mjs";
 
-const URL_ = process.env.FIGMA_MCP_URL ?? "http://127.0.0.1:3845/mcp";
 const tokensPath = new URL("../tokens/tokens.json", import.meta.url);
 const current = JSON.parse(readFileSync(tokensPath, "utf8"));
 const themeNodes = current.figma?.themeNodes;
@@ -15,65 +15,16 @@ if (!themeNodes) {
   process.exit(1);
 }
 
-let sessionId;
-
-async function rpc(body, extraHeaders = {}) {
-  const res = await fetch(URL_, {
-    method: "POST",
-    headers: {
-      "Content-Type": "application/json",
-      Accept: "application/json, text/event-stream",
-      "MCP-Protocol-Version": "2025-06-18",
-      ...(sessionId ? { "mcp-session-id": sessionId } : {}),
-      ...extraHeaders,
-    },
-    body: JSON.stringify(body),
-  });
-  if (!res.ok) throw new Error(`MCP ${res.status}: ${await res.text()}`);
-  if (!sessionId) sessionId = res.headers.get("mcp-session-id") ?? undefined;
-
-  // The server answers as server-sent events; the payload is on the "data:" line.
-  const text = await res.text();
-  const line = text.split("\n").find((l) => l.startsWith("data: "));
-  return line ? JSON.parse(line.slice(6)) : null;
-}
-
-async function variablesFor(nodeId) {
-  const r = await rpc({
-    jsonrpc: "2.0",
-    id: 2,
-    method: "tools/call",
-    params: {
-      name: "get_variable_defs",
-      arguments: { nodeId, clientLanguages: "typescript,tsx", clientFrameworks: "react-native,expo" },
-    },
-  });
-  if (r?.error) throw new Error(`get_variable_defs(${nodeId}): ${r.error.message}`);
-  const body = (r.result.content ?? []).map((c) => c.text ?? "").join("");
-  return JSON.parse(body);
-}
-
-try {
-  await rpc({
-    jsonrpc: "2.0",
-    id: 1,
-    method: "initialize",
-    params: {
-      protocolVersion: "2025-06-18",
-      capabilities: {},
-      clientInfo: { name: "expo-figma-tokens", version: "1.0" },
-    },
-  });
-} catch (e) {
-  console.error(
-    `Cannot reach the Figma MCP server at ${URL_}.\n` +
-      "Open the Figma desktop app, open the design file, then\n" +
-      "Figma menu -> Preferences -> Enable local MCP server.\n\n" +
-      String(e.message)
-  );
-  process.exit(1);
-}
-await rpc({ jsonrpc: "2.0", method: "notifications/initialized" });
+const variablesFor = async (nodeId) => {
+  const body = await mcp("get_variable_defs", { nodeId });
+  try {
+    return JSON.parse(body);
+  } catch {
+    // The server answers in prose when it cannot serve the request at all,
+    // e.g. the desktop app's active tab is not the design file.
+    throw new Error(`Figma MCP server said: ${body.trim()}`);
+  }
+};
 
 const modes = Object.keys(themeNodes);
 const byMode = {};
