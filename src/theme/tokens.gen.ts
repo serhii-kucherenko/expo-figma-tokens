@@ -7,7 +7,7 @@ export const themes = {
     "--color-border": "#E0E0E8",
     "--color-border-subtle": "#F0F0F5",
     "--color-card-bg": "#FFFFFF",
-    "--color-primary": "#3D6BF5",
+    "--color-primary": "#E04747",
     "--color-success": "#33B866",
     "--color-surface": "#F7F7FA",
     "--color-surface-elevated": "#FFFFFF",
