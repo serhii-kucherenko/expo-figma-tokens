@@ -60,6 +60,20 @@ export default async function handler(req, res) {
     }),
   });
 
-  if (!gh.ok) return res.status(502).send(`github ${gh.status}: ${await gh.text()}`);
+  if (!gh.ok) {
+    const body = await gh.text();
+    if (gh.status === 401) {
+      // "Bad credentials" is about the token string itself, not its permissions.
+      // Report its shape so a truncated or whitespace-padded paste is obvious.
+      // Never the value: only the kind prefix and the length.
+      const t = process.env.GH_TOKEN ?? "";
+      const kind = t.includes("_") ? t.slice(0, t.indexOf("_") + 1) : "(no prefix)";
+      const padded = t !== t.trim() ? " HAS LEADING/TRAILING WHITESPACE" : "";
+      return res
+        .status(502)
+        .send(`github 401 bad credentials. Token kind=${kind} length=${t.length}${padded}`);
+    }
+    return res.status(502).send(`github ${gh.status}: ${body}`);
+  }
   return res.status(200).send("dispatched");
 }
