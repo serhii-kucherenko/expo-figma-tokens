@@ -58,7 +58,7 @@ jobs:
       # finds nothing new is silent.
       - name: Open pull request
         if: github.event_name != 'schedule' || steps.check.outputs.match == 'true'
-        uses: peter-evans/create-pull-request@v7
+        uses: peter-evans/create-pull-request@v8
         with:
           branch: figma/tokens
           base: main
