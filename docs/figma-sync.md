@@ -1,0 +1,144 @@
+# Figma -> GitHub PR runbook
+
+Goal: the designer publishes the library with **Ready for dev** in the publish message, and a pull
+request appears here with the new token values.
+
+## How it works
+
+```
+Designer clicks Publish in Figma
+        |  publish message contains "Ready for dev"
+        v
+Figma LIBRARY_PUBLISH webhook  ->  Cloudflare Worker relay  ->  GitHub repository_dispatch
+                                    (checks the message)              |
+                                                                      v
+                                             GitHub Action: pull variables, rebuild theme, open PR
+```
+
+Three moving parts:
+
+1. **The webhook** - Figma fires `LIBRARY_PUBLISH` on every publish. Registered once with
+   `scripts/register-figma-webhook.mjs`.
+2. **The relay** - `infra/figma-webhook-worker/worker.js`. Twenty lines. It exists only because Figma
+   cannot call GitHub's `repository_dispatch` endpoint directly, and because the "Ready for dev"
+   filter has to live somewhere. Free on Cloudflare Workers.
+3. **The Action** - `.github/workflows/sync-figma-tokens.yml`. Pulls variables, regenerates the theme,
+   opens the PR.
+
+## Before you start: which path applies to you
+
+**The Figma Variables REST API is Enterprise-plan only.** Check your plan first.
+
+| Your Figma plan | Path |
+|---|---|
+| Enterprise | **Path A** below. Fully automatic. |
+| Professional / Organization | **Path B** below. Tokens Studio plugin. |
+
+---
+
+## Path A - Enterprise (fully automatic)
+
+### A1. Get a Figma personal access token
+
+1. Open <https://www.figma.com/settings> and scroll to **Personal access tokens**.
+2. Click **Generate new token**.
+3. Name it `expo-figma-tokens ci`.
+4. Set scopes: `file_variables:read` and `webhooks:write`.
+5. Copy the token. Figma shows it once.
+
+### A2. Get the file key and team id
+
+- File key: open the library file. The URL is
+  `https://www.figma.com/design/<FILE_KEY>/<name>`. Copy `<FILE_KEY>`.
+- Team id: open the team page. The URL is `https://www.figma.com/files/team/<TEAM_ID>/...`.
+  Copy `<TEAM_ID>`.
+
+### A3. Add the repo secrets
+
+```bash
+gh secret set FIGMA_TOKEN --repo <owner>/expo-figma-tokens
+gh secret set FIGMA_FILE_KEY --repo <owner>/expo-figma-tokens
+```
+
+Check it works before wiring the webhook:
+
+```bash
+gh workflow run "Sync Figma tokens" --repo <owner>/expo-figma-tokens
+```
+
+A PR titled `design: sync tokens from Figma` should appear within a minute. If it does not, read the
+run log in the Actions tab.
+
+### A4. Make a GitHub token for the relay
+
+1. Open <https://github.com/settings/personal-access-tokens/new>.
+2. Token name: `figma-token-relay`. Expiration: 1 year.
+3. Repository access: **Only select repositories** -> this repo.
+4. Permissions -> Repository permissions -> **Contents: Read and write**.
+5. Generate, copy the token.
+
+### A5. Deploy the relay
+
+```bash
+cd infra/figma-webhook-worker
+npx wrangler login
+npx wrangler secret put FIGMA_PASSCODE   # invent a long random string, keep it
+npx wrangler secret put GITHUB_TOKEN     # the token from A4
+npx wrangler secret put GITHUB_REPO      # <owner>/expo-figma-tokens
+npx wrangler deploy
+```
+
+Wrangler prints the URL, like `https://figma-token-relay.<subdomain>.workers.dev`. Copy it.
+
+### A6. Register the webhook
+
+```bash
+FIGMA_TOKEN=<from A1> \
+FIGMA_TEAM_ID=<from A2> \
+RELAY_URL=<from A5> \
+FIGMA_PASSCODE=<from A5> \
+node scripts/register-figma-webhook.mjs
+```
+
+A `200` response means it is live. Figma immediately sends a `PING`; the worker answers `pong`.
+
+### A7. Test end to end
+
+Ask the designer to publish the library with the message **Ready for dev - test**. Within a minute a
+PR should open. If nothing happens, `curl` the relay URL with a fake payload - it tells you exactly
+which check rejected the event:
+
+```bash
+curl -X POST <RELAY_URL> -H 'content-type: application/json' \
+  -d '{"passcode":"<FIGMA_PASSCODE>","event_type":"LIBRARY_PUBLISH","description":"Ready for dev","file_name":"DS"}'
+```
+
+---
+
+## Path B - not on Enterprise (Tokens Studio plugin)
+
+The relay and the trigger phrase still work. Only the "pull the values" step changes: the plugin
+pushes the token JSON to GitHub instead of the Action pulling it.
+
+1. The designer installs **Tokens Studio for Figma** from the Figma community.
+2. In the plugin: **Settings -> Sync providers -> Add new -> GitHub**.
+3. Fill in: repo `<owner>/expo-figma-tokens`, branch `figma/tokens`, file path `tokens/tokens.json`,
+   and a GitHub token created the same way as step A4.
+4. The designer presses **Push to GitHub** after publishing. The plugin opens a PR on `figma/tokens`.
+5. Delete the `Pull variables from Figma` step from `.github/workflows/sync-figma-tokens.yml`, and
+   change the trigger to `pull_request` on `tokens/tokens.json` so CI regenerates
+   `src/theme/tokens.gen.ts` and pushes it into the same PR.
+
+Trade-off: the designer has to press Push. There is no way around that without the Enterprise API.
+
+---
+
+## Facts this runbook depends on
+
+- Variables REST API requires an Enterprise plan and a Full seat.
+  <https://developers.figma.com/docs/rest-api/variables>
+- Webhook limits are per plan: Professional 150 file webhooks, Organization 300, Enterprise 600.
+  Team webhooks need team-admin rights. <https://developers.figma.com/docs/rest-api/webhooks>
+- The `LIBRARY_PUBLISH` payload carries the publish message. If your payload names that field
+  something other than `description`, the relay's ignore response prints what it saw - adjust
+  `worker.js` and redeploy.

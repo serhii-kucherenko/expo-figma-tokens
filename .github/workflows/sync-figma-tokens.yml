@@ -1,0 +1,55 @@
+name: Sync Figma tokens
+
+on:
+  # Fired by the webhook relay when a library is published with "Ready for dev" in the message.
+  repository_dispatch:
+    types: [figma-ready-for-dev]
+  # Manual button in the Actions tab.
+  workflow_dispatch:
+
+permissions:
+  contents: write
+  pull-requests: write
+
+jobs:
+  sync:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+
+      - uses: actions/setup-node@v5
+        with:
+          node-version: 22
+          cache: npm
+
+      - run: npm ci
+
+      - name: Pull variables from Figma
+        env:
+          FIGMA_TOKEN: ${{ secrets.FIGMA_TOKEN }}
+          FIGMA_FILE_KEY: ${{ secrets.FIGMA_FILE_KEY }}
+        run: npm run tokens:fetch
+
+      - name: Regenerate theme
+        run: npm run tokens
+
+      - name: Typecheck
+        run: npm run typecheck
+
+      - name: Open pull request
+        uses: peter-evans/create-pull-request@v7
+        with:
+          branch: figma/tokens
+          base: main
+          commit-message: "design: sync tokens from Figma"
+          title: "design: sync tokens from Figma"
+          body: |
+            Figma library published with **Ready for dev**.
+
+            - Published by: `${{ github.event.client_payload.triggered_by || 'manual run' }}`
+            - Figma message: `${{ github.event.client_payload.description || 'n/a' }}`
+            - File: `${{ github.event.client_payload.file_name || 'n/a' }}`
+
+            `tokens/tokens.json` and `src/theme/tokens.gen.ts` are regenerated. Review the diff, then merge.
+          labels: design-tokens
+          delete-branch: true
