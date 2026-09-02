@@ -3,6 +3,13 @@
 One serverless function. Figma cannot call GitHub's `repository_dispatch` endpoint itself, and the
 "Ready for dev" check has to live somewhere. This is that somewhere.
 
+Trigger: **`FILE_VERSION_UPDATE`** - the designer does *File -> Save to version history* and names
+the version `Ready for dev`. `LIBRARY_PUBLISH` is also accepted but only fires for files published
+as a library, which this one is not.
+
+**Deploy by pushing to `main`.** The project's Root Directory is `infra/figma-webhook`, which the
+CLI cannot satisfy when run from inside that folder. Git builds are the supported path.
+
 ## Deployed
 
 | | |
@@ -61,7 +68,7 @@ forward a matching publish event to GitHub.
 ```bash
 curl -X POST https://figma-webhook-flax.vercel.app/api/figma \
   -H 'content-type: application/json' \
-  -d "{\"passcode\":\"$(grep FIGMA_PASSCODE ../../.env.local | cut -d= -f2)\",\"event_type\":\"LIBRARY_PUBLISH\",\"description\":\"Ready for dev\",\"file_name\":\"DS\"}"
+  -d "{\"passcode\":\"$(grep FIGMA_PASSCODE ../../.env.local | cut -d= -f2)\",\"event_type\":\"FILE_VERSION_UPDATE\",\"label\":\"Ready for dev\",\"file_name\":\"DS\"}"
 ```
 
 Answers `dispatched` on success. Any other answer names the check that rejected the event, so you

@@ -1,7 +1,7 @@
 # Figma -> GitHub PR runbook
 
-Goal: the designer publishes the library with **Ready for dev** in the publish message, and a pull
-request appears here with the new token values.
+Goal: the designer saves a Figma version named **Ready for dev**, and a pull request appears here
+with the new token values.
 
 ## Route 0 - local sync, no setup at all
 
@@ -21,10 +21,10 @@ adding one line there and re-running the sync.
 ## How the automatic route works
 
 ```
-Designer clicks Publish in Figma
-        |  publish message contains "Ready for dev"
+Designer: File -> Save to version history, names it "Ready for dev"
+        |
         v
-Figma LIBRARY_PUBLISH webhook  ->  relay function (Vercel)  ->  GitHub repository_dispatch
+Figma FILE_VERSION_UPDATE webhook  ->  relay function (Vercel)  ->  GitHub repository_dispatch
                                     (checks the message)              |
                                                                       v
                                              GitHub Action: pull variables, rebuild theme, open PR
@@ -32,8 +32,9 @@ Figma LIBRARY_PUBLISH webhook  ->  relay function (Vercel)  ->  GitHub repositor
 
 Three moving parts:
 
-1. **The webhook** - Figma fires `LIBRARY_PUBLISH` on every publish. Registered once with
-   `scripts/register-figma-webhook.mjs`.
+1. **The webhook** - Figma fires `FILE_VERSION_UPDATE` every time someone saves a named version.
+   Registered once with `scripts/register-figma-webhook.mjs`. `LIBRARY_PUBLISH` is not used: it
+   only fires for files published as a library, and this file is not one.
 2. **The relay** - `infra/figma-webhook/api/figma.js`. Thirty lines on Vercel. It exists only
    because Figma cannot call GitHub's `repository_dispatch` endpoint directly, and because the
    "Ready for dev" filter has to live somewhere. Free on a Vercel hobby plan.
@@ -118,9 +119,9 @@ No Vercel account either? See **Route C** at the bottom - a scheduled poll with 
 
 ```bash
 FIGMA_TOKEN=<from A1> \
-FIGMA_TEAM_ID=<from A2> \
-RELAY_URL=<from A5> \
-FIGMA_PASSCODE=<from A5> \
+FIGMA_FILE_KEY=QFShnF5EA3cNl8afImTyuj \
+RELAY_URL=https://figma-webhook-flax.vercel.app/api/figma \
+FIGMA_PASSCODE=<in .env.local> \
 node scripts/register-figma-webhook.mjs
 ```
 
@@ -128,13 +129,13 @@ A `200` response means it is live. Figma immediately sends a `PING`; the worker 
 
 ### A7. Test end to end
 
-Ask the designer to publish the library with the message **Ready for dev - test**. Within a minute a
-PR should open. If nothing happens, `curl` the relay URL with a fake payload - it tells you exactly
+Ask the designer to do **File -> Save to version history** and name it **Ready for dev - test**.
+Within a minute a PR should open. If nothing happens, `curl` the relay URL with a fake payload - it tells you exactly
 which check rejected the event:
 
 ```bash
 curl -X POST <RELAY_URL> -H 'content-type: application/json' \
-  -d '{"passcode":"<FIGMA_PASSCODE>","event_type":"LIBRARY_PUBLISH","description":"Ready for dev","file_name":"DS"}'
+  -d '{"passcode":"<FIGMA_PASSCODE>","event_type":"FILE_VERSION_UPDATE","label":"Ready for dev","file_name":"DS"}'
 ```
 
 `<RELAY_URL>` ends in `/api/figma`.
@@ -165,9 +166,10 @@ Trade-off: the designer has to press Push. There is no way around that without t
   <https://developers.figma.com/docs/rest-api/variables>
 - Webhook limits are per plan: Professional 150 file webhooks, Organization 300, Enterprise 600.
   Team webhooks need team-admin rights. <https://developers.figma.com/docs/rest-api/webhooks>
-- The `LIBRARY_PUBLISH` payload carries the publish message. If your payload names that field
-  something other than `description`, the relay's ignore response prints what it saw - adjust
-  `worker.js` and redeploy.
+- `FILE_VERSION_UPDATE` carries the version name and description. Figma's docs do not pin the exact
+  field name, so the relay checks `label`, `description`, `version_name` and `name`, and its ignore
+  response prints every text field it actually saw. If none of the four is right, that message tells
+  you which one to add.
 
 ---
 
@@ -189,6 +191,6 @@ that finds nothing new is silent and free.
 exists only in the webhook payload. So the PR appears for *any* variable change the designer saves,
 including work in progress.
 
-**Partial recovery:** ask the designer to also use **File -> Save to version history** and name the
-version `Ready for dev`. The Action can then read `GET /v1/files/:key/versions`, look at the newest
-label, and skip the sync when it does not match. That trades a server for a habit.
+**Partial recovery:** the Action can read `GET /v1/files/:key/versions`, look at the newest label,
+and skip the sync when it is not `Ready for dev`. Same gesture as the webhook route, checked on a
+timer instead of pushed. That trades a server for a delay.

@@ -16,10 +16,10 @@ Figma file: <https://www.figma.com/design/QFShnF5EA3cNl8afImTyuj/Untitled>
 flowchart TD
   A["Designer edits variables in Figma"] --> B{"How does it leave Figma?"}
   B -->|"Manual, local, 5 seconds"| C["npm run sync<br/>reads Figma desktop MCP server"]
-  B -->|"Automatic, on publish"| D["Publish with 'Ready for dev'<br/>in the message"]
+  B -->|"Automatic, on save"| D["File -> Save to version history,<br/>named 'Ready for dev'"]
 
-  D --> E["Figma LIBRARY_PUBLISH webhook"]
-  E --> F["Relay function on Vercel<br/>checks the message text"]
+  D --> E["Figma FILE_VERSION_UPDATE webhook"]
+  E --> F["Relay function on Vercel<br/>checks the version name"]
   F -->|"no match"| G["ignored"]
   F -->|"match"| H["GitHub repository_dispatch"]
   H --> I["GitHub Action<br/>pulls over the REST API"]
