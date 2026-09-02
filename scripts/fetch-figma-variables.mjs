@@ -1,34 +1,24 @@
 #!/usr/bin/env node
 // Figma Variables REST API -> tokens/tokens.json
 //
-// Needs: FIGMA_TOKEN (scope file_variables:read) and FIGMA_FILE_KEY.
-// NOTE: the Variables REST API is Enterprise-plan only. On any other plan use the
-// Tokens Studio plugin instead - it writes tokens/tokens.json straight from Figma.
-// See docs/figma-sync.md.
+// Needs FIGMA_TOKEN with scope file_variables:read. The file key comes from
+// figma.config.json. This endpoint is Enterprise-plan only; on any other plan it
+// answers 403 and the dispatcher falls through to the styles fetcher.
 import { writeFileSync } from "node:fs";
+import { figma, fileKey as resolveFileKey, hex, requireEnv, slug, HEADER } from "./figma-api.mjs";
 
-const token = process.env.FIGMA_TOKEN;
-const fileKey = process.env.FIGMA_FILE_KEY;
-if (!token || !fileKey) {
-  console.error("Set FIGMA_TOKEN and FIGMA_FILE_KEY.");
+const token = requireEnv("FIGMA_TOKEN");
+const fileKey = await resolveFileKey();
+
+let meta;
+try {
+  ({ meta } = await figma(`/v1/files/${fileKey}/variables/local`, token));
+} catch (e) {
+  console.error(e.message);
   process.exit(1);
 }
 
-const res = await fetch(`https://api.figma.com/v1/files/${fileKey}/variables/local`, {
-  headers: { "X-Figma-Token": token },
-});
-if (!res.ok) {
-  console.error(`Figma API ${res.status}: ${await res.text()}`);
-  process.exit(1);
-}
-const { meta } = await res.json();
-
-const hex = ({ r, g, b, a = 1 }) => {
-  const c = (n) => Math.round(n * 255).toString(16).padStart(2, "0").toUpperCase();
-  return `#${c(r)}${c(g)}${c(b)}${a < 1 ? c(a) : ""}`;
-};
-
-// Aliases point at another variable; follow the chain (depth-capped, cycles are a Figma bug not ours).
+// Aliases point at another variable; follow the chain (depth-capped).
 const resolve = (value, modeId, depth = 0) => {
   if (depth > 10) throw new Error("variable alias chain too deep");
   if (value && value.type === "VARIABLE_ALIAS") {
@@ -40,8 +30,6 @@ const resolve = (value, modeId, depth = 0) => {
   if (value && typeof value === "object" && "r" in value) return hex(value);
   return value;
 };
-
-const slug = (s) => s.trim().toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "");
 
 const collections = {};
 for (const collection of Object.values(meta.variableCollections)) {
@@ -60,12 +48,7 @@ for (const collection of Object.values(meta.variableCollections)) {
   collections[slug(collection.name)] = { modes, variables };
 }
 
-const out = {
-  $comment:
-    "Source of truth for the design system. Figma writes this file; nothing else should edit it by hand. Shape mirrors the Figma Variables API: collections -> modes -> variables.",
-  collections,
-};
-
+const out = { $comment: HEADER + " Pulled from the Figma Variables API.", collections };
 writeFileSync(new URL("../tokens/tokens.json", import.meta.url), JSON.stringify(out, null, 2) + "\n");
 console.log(
   `pulled ${Object.keys(collections).length} collections, ` +
