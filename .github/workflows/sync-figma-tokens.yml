@@ -10,13 +10,8 @@ on:
   repository_dispatch:
     types: [figma-ready-for-dev]
 
-  # Manual button in the Actions tab.
+  # Manual button in the Actions tab. Always syncs - a human asked.
   workflow_dispatch:
-    inputs:
-      force:
-        description: "Sync even if the newest version is not named Ready for dev"
-        type: boolean
-        default: false
 
 permissions:
   contents: write
