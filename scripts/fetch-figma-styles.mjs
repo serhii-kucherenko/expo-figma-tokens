@@ -18,9 +18,8 @@ const { meta } = await figma(`/v1/files/${fileKey}/styles`, token);
 const styles = meta.styles ?? [];
 if (styles.length === 0) {
   console.error(
-    "No published styles in this file.\n" +
-      "The designer needs to create colour styles (and publish, if it is a library).\n" +
-      "See docs/figma-sync.md for the naming convention."
+    "No published styles in this file - it defines its design system as variables instead.\n" +
+      "This fallback only helps files built the other way round."
   );
   process.exit(1);
 }
