@@ -1,10 +1,21 @@
 # expo-figma-tokens
 
-A designer changes a colour in Figma. A pull request appears in this repo with that colour changed.
-Nobody typed a hex code.
+A designer changes something in Figma - a colour, a corner radius, a font size, the padding inside a
+card. A pull request appears in this repo with that value changed. Nobody typed a number.
 
 Three themes - Light, Dark, Ocean - are Figma variable *modes*. Add a fourth mode in Figma and it
 shows up in the app with no code change.
+
+**What syncs:**
+
+| Token | Where it comes from | Lands as |
+|---|---|---|
+| Colours, per theme | Figma variables, 15 of them | `bg-primary`, `text-text-secondary` |
+| Corner radius | `cornerRadius` in the design | `rounded-16` |
+| Font sizes | `fontSize` in the design | `text-13` |
+| Spacing and sizes | auto-layout padding, gaps, fixed node sizes | `p-16`, `gap-8`, `h-52` |
+
+The only thing not synced is the font family and weight. See [section 2](#what-is-not-synced).
 
 Figma file: <https://www.figma.com/design/QFShnF5EA3cNl8afImTyuj/Untitled>
 
@@ -14,12 +25,12 @@ Figma file: <https://www.figma.com/design/QFShnF5EA3cNl8afImTyuj/Untitled>
 
 ### The thing this replaces
 
-Without it, a colour change is a conversation:
+Without it, every design value is a conversation:
 
 ```mermaid
 flowchart LR
-  A["Designer changes<br/>a colour"] --> B["Tells the dev<br/>in Slack"]
-  B --> C["Dev opens Figma,<br/>copies the hex"]
+  A["Designer changes a colour,<br/>a radius, a padding"] --> B["Tells the dev<br/>in Slack"]
+  B --> C["Dev opens Figma,<br/>reads the number"]
   C --> D["Dev finds every place<br/>it is hard-coded"]
   D --> E["Dev pastes it,<br/>hopes they got all 3 themes"]
   E --> F["Designer reviews<br/>a screenshot"]
@@ -31,25 +42,28 @@ Every arrow is a place it goes wrong. The usual failures:
 | Failure | What it looks like |
 |---|---|
 | A theme is forgotten | Light gets the new colour, Ocean keeps the old one |
-| A hex is mistyped | `#3D6BF5` becomes `#3D68F5`, nobody notices for a month |
-| The change is never asked for | The designer stops bothering for small fixes, and design drifts |
+| A number is mistyped | `#3D6BF5` becomes `#3D68F5`, or a 14px radius becomes 16 |
+| Only the loud changes get asked for | A colour gets a Slack message. A 2px padding fix never does, so the app drifts from the design a little at a time |
+| The scale rots in both directions | The app keeps spacing values the design dropped, and misses ones it added |
 | Nobody knows what is current | Figma says one thing, the app says another, neither is wrong on paper |
 
 ### What replaces it
 
 ```mermaid
 flowchart LR
-  A["Designer changes<br/>a colour"] --> B["Saves a version<br/>named 'Ready for dev'"]
+  A["Designer changes<br/>anything"] --> B["Saves a version<br/>named 'Ready for dev'"]
   B --> C["A pull request appears"]
   C --> D["Dev reads the diff<br/>and merges"]
 ```
 
 Four steps, two of them automatic. What it buys:
 
-- **One source of truth.** Figma holds the values. This repo holds a generated copy. A hex code
-  exists in exactly one place a human edits, and that place is Figma.
-- **A colour change is a reviewable diff.** `- "#3D6BF5"` / `+ "#E04747"` in a PR, with the theme
-  it belongs to next to it. Not a screenshot, not a Slack thread.
+- **One source of truth.** Figma holds the values. This repo holds a generated copy. A hex code or a
+  spacing number exists in exactly one place a human edits, and that place is Figma.
+- **Every design change is a reviewable diff.** `- "#3D6BF5"` / `+ "#E04747"` in a PR, with the
+  theme it belongs to next to it. Not a screenshot, not a Slack thread.
+- **Small changes ship too.** A 2px padding fix is the same amount of work as a rebrand: none. The
+  changes that used to be too small to mention now arrive with the rest.
 - **All modes move together.** The build fails if a variable is missing from any theme, so a
   half-applied change cannot reach the app.
 - **A rename breaks the build, loudly.** If the designer renames `color/primary`, the class
@@ -67,9 +81,9 @@ Four steps, two of them automatic. What it buys:
 
 ### When it is not worth it
 
-If one person is both designer and developer, and the palette has six colours that never move, this
-is more machinery than the problem deserves. It starts paying off with a second person, a second
-theme, or a palette anyone is still arguing about.
+If one person is both designer and developer, and the design has six colours and one spacing value
+that never move, this is more machinery than the problem deserves. It starts paying off with a
+second person, a second theme, or a design anyone is still arguing about.
 
 ---
 
@@ -77,13 +91,13 @@ theme, or a palette anyone is still arguing about.
 
 ```mermaid
 flowchart TD
-  A["Designer edits variables in Figma"] --> B{"How does it leave Figma?"}
-  B -->|"Manual, local, 5 seconds"| C["npm run sync<br/>reads Figma desktop MCP server"]
+  A["Designer edits the design in Figma<br/>colour variables, radii, spacing, type"] --> B{"How does it leave Figma?"}
+  B -->|"Manual, local, 5 seconds"| C["npm run sync<br/>reads Figma desktop MCP server<br/><i>colours only</i>"]
   B -->|"Automatic, on save"| D["File -> Save to version history,<br/>named 'Ready for dev'"]
 
   D --> E["Scheduled Action asks Figma<br/>for the newest version name"]
   E -->|"no match"| G["skipped, no PR"]
-  E -->|"match"| I["GitHub Action<br/>pulls over the REST API"]
+  E -->|"match"| I["GitHub Action<br/>pulls over the REST API<br/><i>colours and the scale</i>"]
 
   C --> J["tokens/tokens.json"]
   I --> J
@@ -91,7 +105,7 @@ flowchart TD
   K --> L["src/theme/tokens.gen.ts"]
   L --> M["ThemeProvider sets CSS variables"]
   L --> N["tailwind.config.js builds classes"]
-  M --> O["App renders in the new colours"]
+  M --> O["App renders with the new values"]
   N --> O
   I --> P["Pull request opens"]
 ```
@@ -194,20 +208,23 @@ automating it would buy little.
 
 ```mermaid
 flowchart TB
-  subgraph L["Local - npm run sync"]
+  subgraph L["Local - npm run sync (colours only)"]
     L1["Figma desktop app, file open"] --> L2["Local MCP server<br/>127.0.0.1:3845"]
     L2 --> L3["scripts/fetch-figma-mcp.mjs"]
   end
-  subgraph C["CI - GitHub Action"]
+  subgraph C["CI - GitHub Action (everything)"]
     C1["GET /v1/files/:key/nodes<br/>the three theme frames"] --> C2["scripts/fetch-figma-rest.mjs"]
     M["figma.variableIds<br/>committed id -> name map"] --> C2
+    C2 --> C5["colours from boundVariables<br/>scale from the geometry"]
   end
   L3 --> T["tokens/tokens.json"]
-  C2 --> T
+  C5 --> T
 ```
 
 | | Local MCP | CI REST |
 |---|---|---|
+| Syncs colours | yes | yes |
+| Syncs the radius / text / spacing scale | **no** | yes |
 | Needs a token | no | yes, `FIGMA_TOKEN` |
 | Needs Figma desktop running | yes | no |
 | Works in GitHub Actions | **no** | yes |
@@ -246,7 +263,7 @@ npm install && npm run tokens && npx expo start
 | `npm run sync` | Pull from Figma desktop, then rebuild the theme |
 | `npm run tokens` | Rebuild `src/theme/tokens.gen.ts` from `tokens/tokens.json` |
 | `npm run tokens:mcp` | Pull from Figma desktop only |
-| `npm run tokens:fetch` | Pull over the Figma REST API, resolving colours from the theme frames (what CI runs) |
+| `npm run tokens:fetch` | Pull everything over the Figma REST API - colours from the variables, the scale from the geometry (what CI runs) |
 | `npm run tokens:map` | One-time: rebuild the variable-id map (needs Figma desktop open on the file) |
 | `npm run typecheck` | `tsc --noEmit` |
 
@@ -263,11 +280,14 @@ npm install && npm run tokens && npx expo start
 3. `npm run sync`
 4. The app reloads. Every blue thing is the new colour.
 
+`npm run sync` pulls colours only, because the local server reads variables and the scale is not
+made of variables. For the scale as well, use `npm run tokens:fetch`, which needs `FIGMA_TOKEN`.
+
 If step 3 says it cannot reach the server: Figma menu -> Preferences -> **Enable local MCP server**.
 
 ### On GitHub, the way the designer will use it
 
-1. In Figma, change any colour variable.
+1. In Figma, change anything - a colour variable, a corner radius, the padding in a card.
 2. **File -> Save to version history**, name it `Ready for dev`, save.
 3. Actions tab -> **Sync Figma tokens** -> **Run workflow**.
 4. A pull request appears with your change. Read the diff, merge.
@@ -319,7 +339,7 @@ API on a schedule, with a local MCP route for the fast loop.
 | | How it works | Figma plan | Secret needed | Designer effort | Runs in CI | Delay |
 |---|---|---|---|---|---|---|
 | **A. Copy by hand** | Dev reads the hex, types it | any | none | tell someone | n/a | hours to never |
-| **B. REST, resolving from the design** ✅ | Read the theme frames; each node says which variable it uses and what colour that came out as | **any** | `FIGMA_TOKEN` | name a version | yes | seconds |
+| **B. REST, resolving from the design** ✅ | Read the theme frames. Each node says which variable its fill uses and what colour that came out as, and carries its own radius, font size and padding | **any** | `FIGMA_TOKEN` | name a version | yes | seconds |
 | **C. REST Variables API** | `GET /v1/files/:key/variables/local` returns the table directly | **Enterprise only** | `FIGMA_TOKEN` | name a version | yes | seconds |
 | **D. Local Dev Mode MCP** ✅ | Figma desktop runs a server on `127.0.0.1:3845` | any | **none** | none | **no** | seconds |
 | **E. Tokens Studio plugin** | Designer runs a plugin that pushes a JSON file to the repo | any | a GitHub token, in Figma | **run the plugin, every time** | yes | seconds |
@@ -347,6 +367,10 @@ once, and why a rename needs it re-run.
 **D** needs no token, no plan, and no network. It is the right thing while you are actually working:
 change a colour, `npm run sync`, watch the app reload. It cannot run in CI, because the server only
 exists next to the Figma desktop app, so it is a companion to B and not a replacement.
+
+It also only reads variables, and the radius / type / spacing scale is not made of variables on this
+file. So the fast local loop covers colours; the scale rides along on the CI route, where it belongs
+anyway - a spacing change is rarer and worth a PR.
 
 ### Why not E
 
@@ -384,4 +408,4 @@ opens nothing.
 | One generated `tokens.json` | Both routes write the same file, so the app never learns which one produced it |
 | NativeWind v4 + CSS variables | The shadcn pattern, and the only way to theme without threading a context through every component. Tailwind pinned to v3 - NativeWind v4 does not support v4 |
 | Themes are Figma **modes**, not separate files | Adding a fourth theme is a Figma action, not a code change |
-| PR, never a direct push to `main` | A colour change is a design decision. Someone should look at it |
+| PR, never a direct push to `main` | A design value is a decision. Someone should look at it |
