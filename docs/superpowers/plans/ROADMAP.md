@@ -31,6 +31,10 @@ Grill tree decided without asking Serhii:
   learns which one produced it.
 - **Three sync routes, not one**: local MCP (no secrets, cannot run in CI), REST Variables API
   (Enterprise), REST Styles API (any plan). The dispatcher tries them in order.
+- **Relay on Vercel, not Cloudflare**: Serhii already has two Vercel hobby teams wired to this
+  GitHub account, so the relay costs him no new account. A scheduled poll is documented as Route C
+  for anyone who wants zero hosting, but it cannot see the publish message and so loses the
+  "Ready for dev" gate.
 - **Mode-to-node map in `tokens.json`**: the MCP server resolves variables per node, so the file has
   to say which Figma frame means "dark". One line per theme.
 - **Styling**: NativeWind v4 + CSS variables, the shadcn pattern. Tailwind pinned to v3 - NativeWind

@@ -24,7 +24,7 @@ adding one line there and re-running the sync.
 Designer clicks Publish in Figma
         |  publish message contains "Ready for dev"
         v
-Figma LIBRARY_PUBLISH webhook  ->  Cloudflare Worker relay  ->  GitHub repository_dispatch
+Figma LIBRARY_PUBLISH webhook  ->  relay function (Vercel)  ->  GitHub repository_dispatch
                                     (checks the message)              |
                                                                       v
                                              GitHub Action: pull variables, rebuild theme, open PR
@@ -34,9 +34,9 @@ Three moving parts:
 
 1. **The webhook** - Figma fires `LIBRARY_PUBLISH` on every publish. Registered once with
    `scripts/register-figma-webhook.mjs`.
-2. **The relay** - `infra/figma-webhook-worker/worker.js`. Twenty lines. It exists only because Figma
-   cannot call GitHub's `repository_dispatch` endpoint directly, and because the "Ready for dev"
-   filter has to live somewhere. Free on Cloudflare Workers.
+2. **The relay** - `infra/figma-webhook/api/figma.js`. Thirty lines on Vercel. It exists only
+   because Figma cannot call GitHub's `repository_dispatch` endpoint directly, and because the
+   "Ready for dev" filter has to live somewhere. Free on a Vercel hobby plan.
 3. **The Action** - `.github/workflows/sync-figma-tokens.yml`. Pulls variables, regenerates the theme,
    opens the PR.
 
@@ -99,15 +99,17 @@ run log in the Actions tab.
 ### A5. Deploy the relay
 
 ```bash
-cd infra/figma-webhook-worker
-npx wrangler login
-npx wrangler secret put FIGMA_PASSCODE   # invent a long random string, keep it
-npx wrangler secret put GITHUB_TOKEN     # the token from A4
-npx wrangler secret put GITHUB_REPO      # <owner>/expo-figma-tokens
-npx wrangler deploy
+cd infra/figma-webhook
+npx vercel link
+npx vercel env add FIGMA_PASSCODE production   # invent a long random string, keep it
+npx vercel env add GH_TOKEN production         # the token from A4
+npx vercel env add GITHUB_REPO production      # <owner>/expo-figma-tokens
+npx vercel deploy --prod
 ```
 
-Wrangler prints the URL, like `https://figma-token-relay.<subdomain>.workers.dev`. Copy it.
+Vercel prints the deployment URL. The endpoint is that URL plus `/api/figma`. Copy it.
+
+No Vercel account either? See **Route C** at the bottom - a scheduled poll with no server at all.
 
 ### A6. Register the webhook
 
@@ -131,6 +133,8 @@ which check rejected the event:
 curl -X POST <RELAY_URL> -H 'content-type: application/json' \
   -d '{"passcode":"<FIGMA_PASSCODE>","event_type":"LIBRARY_PUBLISH","description":"Ready for dev","file_name":"DS"}'
 ```
+
+`<RELAY_URL>` ends in `/api/figma`.
 
 ---
 
@@ -161,3 +165,27 @@ Trade-off: the designer has to press Push. There is no way around that without t
 - The `LIBRARY_PUBLISH` payload carries the publish message. If your payload names that field
   something other than `description`, the relay's ignore response prints what it saw - adjust
   `worker.js` and redeploy.
+
+---
+
+## Route C - no relay at all (scheduled poll)
+
+If you do not want to host anything, drop the webhook and the relay and let GitHub check on a timer.
+
+Add this to `.github/workflows/sync-figma-tokens.yml` under `on:`:
+
+```yaml
+  schedule:
+    - cron: "0 */6 * * *"   # every 6 hours
+```
+
+`peter-evans/create-pull-request` opens a PR only when the token values actually changed, so a run
+that finds nothing new is silent and free.
+
+**What you give up:** the "Ready for dev" gate. A poll cannot see the publish message - that text
+exists only in the webhook payload. So the PR appears for *any* variable change the designer saves,
+including work in progress.
+
+**Partial recovery:** ask the designer to also use **File -> Save to version history** and name the
+version `Ready for dev`. The Action can then read `GET /v1/files/:key/versions`, look at the newest
+label, and skip the sync when it does not match. That trades a server for a habit.

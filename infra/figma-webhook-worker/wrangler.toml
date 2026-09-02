@@ -1,8 +1,0 @@
-name = "figma-token-relay"
-main = "worker.js"
-compatibility_date = "2026-09-01"
-
-# Secrets (set with `wrangler secret put <NAME>`):
-#   FIGMA_PASSCODE  - the same passcode used when registering the Figma webhook
-#   GITHUB_TOKEN    - fine-grained PAT, Contents: read-write on this repo only
-#   GITHUB_REPO     - e.g. serhii-kucherenko/expo-figma-tokens

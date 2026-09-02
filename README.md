@@ -19,7 +19,7 @@ flowchart TD
   B -->|"Automatic, on publish"| D["Publish with 'Ready for dev'<br/>in the message"]
 
   D --> E["Figma LIBRARY_PUBLISH webhook"]
-  E --> F["Cloudflare Worker<br/>checks the message text"]
+  E --> F["Relay function on Vercel<br/>checks the message text"]
   F -->|"no match"| G["ignored"]
   F -->|"match"| H["GitHub repository_dispatch"]
   H --> I["GitHub Action<br/>pulls over the REST API"]
