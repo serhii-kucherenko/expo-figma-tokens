@@ -10,7 +10,7 @@
 // scripts/map-figma-variable-ids.mjs writes into tokens/tokens.json.
 import { readFileSync, writeFileSync } from "node:fs";
 import { figma, fileKey as resolveFileKey, requireEnv, HEADER } from "./figma-api.mjs";
-import { boundColours, walk } from "./figma-nodes.mjs";
+import { boundColours, geometry, primitivesFrom, walk } from "./figma-nodes.mjs";
 
 const token = requireEnv("FIGMA_TOKEN");
 const tokensPath = new URL("../tokens/tokens.json", import.meta.url);
@@ -31,6 +31,7 @@ const ids = modes.map((m) => themeNodes[m]).join(",");
 const { nodes } = await figma(`/v1/files/${fileKey}/nodes?ids=${ids}`, token);
 
 const byMode = {};
+const geo = { radius: new Set(), space: new Set(), text: new Set() };
 for (const mode of modes) {
   const key = themeNodes[mode];
   const doc = nodes[key]?.document ?? nodes[key.replace(":", "-")]?.document;
@@ -40,6 +41,7 @@ for (const mode of modes) {
   }
   const found = {};
   walk(doc, (n) => {
+    geometry(n, geo);
     for (const { variableId, hex } of boundColours(n)) {
       const name = variableIds[variableId];
       if (name) found[name] ??= hex; // first use wins; later ones are the same value
@@ -70,5 +72,14 @@ current.collections.theme = {
   ),
 };
 
+// Spacing, radius and type size are not variables on this file, so they come
+// from the geometry of the same frames rather than from a variables panel.
+current.collections.primitives = primitivesFrom(geo);
+const primCount = Object.keys(current.collections.primitives.variables).length;
+
 writeFileSync(tokensPath, JSON.stringify(current, null, 2) + "\n");
-console.log(`resolved ${names.length} variables across ${modes.length} modes (${modes.join(", ")})`);
+console.log(
+  `resolved ${names.length} variables across ${modes.length} modes (${modes.join(", ")})\n` +
+    `read ${primCount} primitives from the design geometry ` +
+    `(${geo.radius.size} radius, ${geo.text.size} text, ${geo.space.size} space)`
+);

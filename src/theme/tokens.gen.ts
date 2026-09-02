@@ -7,7 +7,7 @@ export const themes = {
     "--color-border": "#E0E0E8",
     "--color-border-subtle": "#F0F0F5",
     "--color-card-bg": "#FFFFFF",
-    "--color-primary": "#E04747",
+    "--color-primary": "#3D6BF5",
     "--color-success": "#33B866",
     "--color-surface": "#F7F7FA",
     "--color-surface-elevated": "#FFFFFF",
@@ -57,10 +57,12 @@ export const themes = {
 
 export const primitives = {
   "radius": {
+    "1": 1,
     "2": 2,
     "3": 3,
     "8": 8,
     "12": 12,
+    "14": 14,
     "16": 16,
     "40": 40,
     "pill": 999
@@ -78,13 +80,15 @@ export const primitives = {
     "28": 28
   },
   "space": {
-    "2": 2,
+    "1": 1,
     "3": 3,
     "4": 4,
     "5": 5,
     "6": 6,
     "8": 8,
+    "9": 9,
     "10": 10,
+    "11": 11,
     "12": 12,
     "14": 14,
     "16": 16,
@@ -97,10 +101,7 @@ export const primitives = {
     "40": 40,
     "48": 48,
     "52": 52,
-    "56": 56,
-    "60": 60,
-    "80": 80,
-    "134": 134
+    "56": 56
   }
 } as const;
 
