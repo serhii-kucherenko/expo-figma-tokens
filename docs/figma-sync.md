@@ -55,11 +55,15 @@ Three moving parts:
 
 ### A1. Get a Figma personal access token
 
-1. Open <https://www.figma.com/settings> and scroll to **Personal access tokens**.
-2. Click **Generate new token**.
-3. Name it `expo-figma-tokens ci`.
-4. Set scopes: `file_variables:read` and `webhooks:write`.
-5. Copy the token. Figma shows it once.
+1. Open <https://www.figma.com/settings>.
+2. Click the **Security** tab, scroll to **Personal access tokens**.
+3. Click **Generate new token**.
+4. Name: `expo-figma-tokens ci`. Expiration: 1 year (or No expiration).
+5. Scopes - tick all three:
+   - `files:read` - the Styles API fallback, works on every plan
+   - `file_variables:read` - the Variables API, Enterprise plans only
+   - `webhooks:write` - registers the publish webhook in step A6
+6. Press Enter, then copy the token. **Figma shows it once.** Navigate away and you start over.
 
 ### A2. Get the file key and team id
 
