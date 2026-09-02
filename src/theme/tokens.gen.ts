@@ -4,10 +4,10 @@
 export const themes = {
   "light": {
     "--color-background": "#FFFFFF",
-    "--color-border": "#E0E0E8",
+    "--color-border": "#9999A8",
     "--color-border-subtle": "#F0F0F5",
     "--color-card-bg": "#FFFFFF",
-    "--color-primary": "#E04747",
+    "--color-primary": "#F5AD2E",
     "--color-success": "#33B866",
     "--color-surface": "#F7F7FA",
     "--color-surface-elevated": "#FFFFFF",
