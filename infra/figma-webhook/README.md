@@ -18,9 +18,23 @@ One serverless function. Figma cannot call GitHub's `repository_dispatch` endpoi
 |---|---|---|
 | `FIGMA_PASSCODE` | yes | Shared secret Figma echoes back. Value is in `.env.local` at the repo root (gitignored). |
 | `GITHUB_REPO` | yes | `serhii-kucherenko/expo-figma-tokens` |
-| `GH_TOKEN` | **no** | Fine-grained GitHub PAT, Contents: read-write on this repo only |
+| `GH_TOKEN` | yes | Fine-grained GitHub PAT, Contents: read-write on this repo only |
 
 `GH_TOKEN`, not `GITHUB_TOKEN`: Vercel's Git integration injects `GITHUB_*` names itself.
+
+### If the relay answers `github 403: Resource not accessible by personal access token`
+
+Two causes, both on the token:
+
+1. **The repo is not in the token's list.** A fine-grained token defaults to *Public repositories*,
+   and this repo is private. It must be **Only select repositories** -> `expo-figma-tokens`.
+2. **Contents is read-only.** `repository_dispatch` needs **Contents: Read and write**.
+
+Check both at <https://github.com/settings/personal-access-tokens>. Editing the token keeps the same
+value, so nothing needs re-adding to Vercel afterwards.
+
+A classic token with the `repo` scope also works and has no per-permission subtleties, at the cost of
+being far broader than this endpoint needs.
 
 Add the missing one:
 
